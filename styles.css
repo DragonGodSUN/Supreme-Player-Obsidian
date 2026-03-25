@@ -1,0 +1,17 @@
+.self-discipline-tracker-modal {
+  padding: 20px;
+}
+
+.self-discipline-tracker-stats {
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.self-discipline-tracker-level {
+  color: var(--text-accent);
+  font-weight: bold;
+}
+
+.self-discipline-tracker-reward {
+  color: var(--text-success);
+}

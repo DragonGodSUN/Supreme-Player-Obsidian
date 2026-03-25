@@ -1,0 +1,10 @@
+{
+	"id": "supreme-player",
+	"name": "Supreme Player",
+	"version": "1.0.0",
+	"minAppVersion": "1.8.0",
+	"description": "超越玩家系统 - 自律习惯养成游戏化，积分、等级、商城、许愿池",
+	"author": "LH_Lshen",
+	"isDesktopOnly": false,
+	"fundingUrl": ""
+}

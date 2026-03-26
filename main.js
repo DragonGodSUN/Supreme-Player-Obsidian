@@ -141,37 +141,50 @@ var require_data_store = __commonJS({
         return null;
       }
       autoDetectTemplatePath() {
-        const dailyNotesSettings = this.getDailyNotesSettings();
-        if (dailyNotesSettings) {
-          const folder = dailyNotesSettings.folder || "";
-          const template = dailyNotesSettings.template || "";
-          if (template)
-            return template;
-          if (folder)
-            return `${folder}/Template.md`;
+        var _a, _b, _c;
+        let folder = "Notes/DailyNotes";
+        let template = "";
+        const dailyNotesPlugin = (_b = (_a = this.app.internalPlugins) == null ? void 0 : _a.plugins) == null ? void 0 : _b["daily-notes"];
+        if ((dailyNotesPlugin == null ? void 0 : dailyNotesPlugin.enabled) && ((_c = dailyNotesPlugin == null ? void 0 : dailyNotesPlugin.instance) == null ? void 0 : _c.options)) {
+          folder = dailyNotesPlugin.instance.options.folder || folder;
+          template = dailyNotesPlugin.instance.options.template || "";
         }
-        return "Temps/DailyTracker.md";
+        if (template)
+          return template;
+        return `${folder}/Template`;
       }
       autoDetectDataPath() {
-        const dailyNotesSettings = this.getDailyNotesSettings();
-        if (dailyNotesSettings) {
-          const folder = dailyNotesSettings.folder || "";
-          if (folder)
-            return `${folder}/supreme-player-data.json`;
+        var _a, _b, _c;
+        let folder = "Notes/DailyNotes";
+        const dailyNotesPlugin = (_b = (_a = this.app.internalPlugins) == null ? void 0 : _a.plugins) == null ? void 0 : _b["daily-notes"];
+        if ((dailyNotesPlugin == null ? void 0 : dailyNotesPlugin.enabled) && ((_c = dailyNotesPlugin == null ? void 0 : dailyNotesPlugin.instance) == null ? void 0 : _c.options)) {
+          folder = dailyNotesPlugin.instance.options.folder || folder;
         }
-        return "supreme-player-data.json";
+        return `${folder}/supreme-player-data.json`;
       }
       async loadConfig() {
         try {
-          const adapter = this.app.vault.adapter;
-          if (await adapter.exists(CONFIG_FILE)) {
-            const content = await adapter.read(CONFIG_FILE);
-            return JSON.parse(content);
+          const adapter2 = this.app.vault.adapter;
+          if (await adapter2.exists(CONFIG_FILE)) {
+            const content = await adapter2.read(CONFIG_FILE);
+            const config = JSON.parse(content);
+            if (!config.currencies) {
+              config.currencies = [
+                { id: "wishStars", name: "\u613F\u661F", icon: "\u2B50", description: "\u7528\u4E8E\u8BB8\u613F\u548C\u6270\u52A8\u4E16\u754C\u7EBF", earnRate: 100, earnAmount: 1, color: "#ffd700", editable: true },
+                { id: "rareItemCards", name: "\u7A00\u6709\u9053\u5177\u5361", icon: "\u{1F3B4}", description: "\u7528\u4E8E\u8D2D\u4E70\u7A00\u6709\u54C1\u8D28\u5546\u54C1", earnRate: 500, earnAmount: 1, color: "#9966ff", editable: true },
+                { id: "legendaryItemCards", name: "\u4F20\u5947\u9053\u5177\u5361", icon: "\u{1F320}", description: "\u7528\u4E8E\u8D2D\u4E70\u4F20\u5947\u54C1\u8D28\u5546\u54C1", earnRate: 2e3, earnAmount: 1, color: "#ffaa00", editable: true }
+              ];
+              await adapter2.write(CONFIG_FILE, JSON.stringify(config, null, 2));
+            }
+            return config;
           }
         } catch (e) {
           console.error("Failed to load config:", e);
         }
-        return this.getDefaultConfig();
+        const defaultConfig = this.getDefaultConfig();
+        const adapter = this.app.vault.adapter;
+        await adapter.write(CONFIG_FILE, JSON.stringify(defaultConfig, null, 2));
+        return defaultConfig;
       }
       getDefaultConfig() {
         const detectedDataPath = this.autoDetectDataPath();
@@ -227,9 +240,15 @@ var require_data_store = __commonJS({
         await adapter.write(CONFIG_FILE, JSON.stringify(this.config, null, 2));
       }
       getCurrencies() {
+        const defaultCurrencies = [
+          { id: "wishStars", name: "\u613F\u661F", icon: "\u2B50", description: "\u7528\u4E8E\u8BB8\u613F\u548C\u6270\u52A8\u4E16\u754C\u7EBF", earnRate: 100, earnAmount: 1, color: "#ffd700", editable: true },
+          { id: "rareItemCards", name: "\u7A00\u6709\u9053\u5177\u5361", icon: "\u{1F3B4}", description: "\u7528\u4E8E\u8D2D\u4E70\u7A00\u6709\u54C1\u8D28\u5546\u54C1", earnRate: 500, earnAmount: 1, color: "#9966ff", editable: true },
+          { id: "legendaryItemCards", name: "\u4F20\u5947\u9053\u5177\u5361", icon: "\u{1F320}", description: "\u7528\u4E8E\u8D2D\u4E70\u4F20\u5947\u54C1\u8D28\u5546\u54C1", earnRate: 2e3, earnAmount: 1, color: "#ffaa00", editable: true }
+        ];
         if (!this.config)
-          return [];
-        return [...this.config.currencies, ...this.config.customCurrencies || []];
+          return defaultCurrencies;
+        const currencies = this.config.currencies || defaultCurrencies;
+        return [...currencies, ...this.config.customCurrencies || []];
       }
       async searchDataFile() {
         const dataFileName = "supreme-player-data.json";
@@ -997,16 +1016,21 @@ var require_core = __commonJS({
     var { Notice } = require("obsidian");
     var Core3 = {
       getDailyNotePath(app) {
-        var _a, _b, _c, _d;
-        const dailyNotePlugin = (_b = (_a = app.internalPlugins) == null ? void 0 : _a.plugins) == null ? void 0 : _b["daily-notes"];
-        if (dailyNotePlugin == null ? void 0 : dailyNotePlugin.instance) {
-          const moment = window.moment;
-          const folder = ((_c = dailyNotePlugin.instance.options) == null ? void 0 : _c.folder) || "Notes/DailyNotes";
-          const format = ((_d = dailyNotePlugin.instance.options) == null ? void 0 : _d.format) || "yyyy-MM-dd";
-          const dateStr = moment().format(format);
-          return folder + "/" + dateStr + ".md";
+        var _a, _b, _c;
+        let folder = "Notes/DailyNotes";
+        let format = "YYYY-MM-DD";
+        const dailyNotesPlugin = (_b = (_a = app.internalPlugins) == null ? void 0 : _a.plugins) == null ? void 0 : _b["daily-notes"];
+        if ((dailyNotesPlugin == null ? void 0 : dailyNotesPlugin.enabled) && ((_c = dailyNotesPlugin == null ? void 0 : dailyNotesPlugin.instance) == null ? void 0 : _c.options)) {
+          folder = dailyNotesPlugin.instance.options.folder || folder;
+          format = dailyNotesPlugin.instance.options.format || format;
         }
-        return "Notes/DailyNotes/" + (/* @__PURE__ */ new Date()).toISOString().split("T")[0] + ".md";
+        if (!format)
+          format = "YYYY-MM-DD";
+        const moment = window.moment;
+        const dateStr = moment().format(format);
+        const path = `${folder}/${dateStr}.md`;
+        console.log("[Core] Daily note path:", path);
+        return path;
       },
       async processTodayNote(plugin, forceReprocess = false) {
         const dailyNotePath = this.getDailyNotePath(plugin.app);
@@ -1624,10 +1648,17 @@ var require_ui = __commonJS({
         confirmBtn.style.flex = "1";
         confirmBtn.onclick = async () => {
           modal.close();
+          const result = await plugin.dataStore.addPoints(currentPoints);
           const stats = plugin.dataStore.getStats();
           stats.lastCheckInDate = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
           await plugin.dataStore.save();
-          await Core3.processTodayNote(plugin);
+          let message = "\u2705 \u6253\u5361\u5B8C\u6210\uFF01+" + currentPoints + "\u79EF\u5206";
+          if (result.levelUp)
+            message += " \u{1F389} \u7B49\u7EA7\u63D0\u5347\u5230 Lv." + result.newLevel + "\uFF01";
+          for (const r of result.rewards)
+            message += " " + r;
+          new Notice(message);
+          plugin.updateStatusBar();
         };
         const cancelBtn = document.createElement("button");
         cancelBtn.textContent = "\u7EE7\u7EED\u52AA\u529B";
@@ -1699,12 +1730,18 @@ var require_ui = __commonJS({
           if (!stats.inventory)
             stats.inventory = [];
           stats.inventory.push(rewardItem);
-          await plugin.dataStore.save();
         }
+        const addResult = await plugin.dataStore.addPoints(points);
         const statsForDate = plugin.dataStore.getStats();
         statsForDate.lastCheckInDate = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
         await plugin.dataStore.save();
-        await Core3.processTodayNote(plugin);
+        plugin.updateStatusBar();
+        let message = "\u2705 \u5B8C\u7F8E\u6253\u5361\uFF01+" + points + "\u79EF\u5206";
+        if (addResult.levelUp)
+          message += " \u{1F389} \u7B49\u7EA7\u63D0\u5347\u5230 Lv." + addResult.newLevel + "\uFF01";
+        for (const r of addResult.rewards)
+          message += " " + r;
+        new Notice(message);
         const closeBtn = document.createElement("button");
         closeBtn.textContent = "\u{1F64F} \u611F\u8C22\u795D\u798F";
         closeBtn.className = "mod-cta";

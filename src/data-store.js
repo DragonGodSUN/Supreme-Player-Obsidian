@@ -21,23 +21,28 @@ class DataStore {
   }
 
   autoDetectTemplatePath() {
-    const dailyNotesSettings = this.getDailyNotesSettings();
-    if (dailyNotesSettings) {
-      const folder = dailyNotesSettings.folder || '';
-      const template = dailyNotesSettings.template || '';
-      if (template) return template;
-      if (folder) return `${folder}/Template.md`;
+    let folder = 'Notes/DailyNotes';
+    let template = '';
+
+    const dailyNotesPlugin = this.app.internalPlugins?.plugins?.['daily-notes'];
+    if (dailyNotesPlugin?.enabled && dailyNotesPlugin?.instance?.options) {
+      folder = dailyNotesPlugin.instance.options.folder || folder;
+      template = dailyNotesPlugin.instance.options.template || '';
     }
-    return 'Temps/DailyTracker.md';
+
+    if (template) return template;
+    return `${folder}/Template`;
   }
 
   autoDetectDataPath() {
-    const dailyNotesSettings = this.getDailyNotesSettings();
-    if (dailyNotesSettings) {
-      const folder = dailyNotesSettings.folder || '';
-      if (folder) return `${folder}/supreme-player-data.json`;
+    let folder = 'Notes/DailyNotes';
+    
+    const dailyNotesPlugin = this.app.internalPlugins?.plugins?.['daily-notes'];
+    if (dailyNotesPlugin?.enabled && dailyNotesPlugin?.instance?.options) {
+      folder = dailyNotesPlugin.instance.options.folder || folder;
     }
-    return 'supreme-player-data.json';
+    
+    return `${folder}/supreme-player-data.json`;
   }
 
   async loadConfig() {
@@ -45,12 +50,26 @@ class DataStore {
       const adapter = this.app.vault.adapter;
       if (await adapter.exists(CONFIG_FILE)) {
         const content = await adapter.read(CONFIG_FILE);
-        return JSON.parse(content);
+        const config = JSON.parse(content);
+        
+        if (!config.currencies) {
+          config.currencies = [
+            { id: 'wishStars', name: '愿星', icon: '⭐', description: '用于许愿和扰动世界线', earnRate: 100, earnAmount: 1, color: '#ffd700', editable: true },
+            { id: 'rareItemCards', name: '稀有道具卡', icon: '🎴', description: '用于购买稀有品质商品', earnRate: 500, earnAmount: 1, color: '#9966ff', editable: true },
+            { id: 'legendaryItemCards', name: '传奇道具卡', icon: '🌠', description: '用于购买传奇品质商品', earnRate: 2000, earnAmount: 1, color: '#ffaa00', editable: true }
+          ];
+          await adapter.write(CONFIG_FILE, JSON.stringify(config, null, 2));
+        }
+        
+        return config;
       }
     } catch (e) {
       console.error('Failed to load config:', e);
     }
-    return this.getDefaultConfig();
+    const defaultConfig = this.getDefaultConfig();
+    const adapter = this.app.vault.adapter;
+    await adapter.write(CONFIG_FILE, JSON.stringify(defaultConfig, null, 2));
+    return defaultConfig;
   }
 
   getDefaultConfig() {
@@ -108,8 +127,15 @@ class DataStore {
   }
 
   getCurrencies() {
-    if (!this.config) return [];
-    return [...this.config.currencies, ...(this.config.customCurrencies || [])];
+    const defaultCurrencies = [
+      { id: 'wishStars', name: '愿星', icon: '⭐', description: '用于许愿和扰动世界线', earnRate: 100, earnAmount: 1, color: '#ffd700', editable: true },
+      { id: 'rareItemCards', name: '稀有道具卡', icon: '🎴', description: '用于购买稀有品质商品', earnRate: 500, earnAmount: 1, color: '#9966ff', editable: true },
+      { id: 'legendaryItemCards', name: '传奇道具卡', icon: '🌠', description: '用于购买传奇品质商品', earnRate: 2000, earnAmount: 1, color: '#ffaa00', editable: true }
+    ];
+    
+    if (!this.config) return defaultCurrencies;
+    const currencies = this.config.currencies || defaultCurrencies;
+    return [...currencies, ...(this.config.customCurrencies || [])];
   }
 
   async searchDataFile() {

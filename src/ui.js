@@ -349,10 +349,18 @@ const UI = {
     confirmBtn.style.flex = '1';
     confirmBtn.onclick = async () => {
       modal.close();
+      const result = await plugin.dataStore.addPoints(currentPoints);
+      
       const stats = plugin.dataStore.getStats();
       stats.lastCheckInDate = new Date().toISOString().split('T')[0];
       await plugin.dataStore.save();
-      await Core.processTodayNote(plugin);
+      
+      let message = '✅ 打卡完成！+' + currentPoints + '积分';
+      if (result.levelUp) message += ' 🎉 等级提升到 Lv.' + result.newLevel + '！';
+      for (const r of result.rewards) message += ' ' + r;
+      new Notice(message);
+      
+      plugin.updateStatusBar();
     };
 
     const cancelBtn = document.createElement('button');
@@ -433,14 +441,20 @@ const UI = {
       const stats = plugin.dataStore.getStats();
       if (!stats.inventory) stats.inventory = [];
       stats.inventory.push(rewardItem);
-      await plugin.dataStore.save();
     }
 
+    const addResult = await plugin.dataStore.addPoints(points);
+    
     const statsForDate = plugin.dataStore.getStats();
     statsForDate.lastCheckInDate = new Date().toISOString().split('T')[0];
     await plugin.dataStore.save();
 
-    await Core.processTodayNote(plugin);
+    plugin.updateStatusBar();
+
+    let message = '✅ 完美打卡！+' + points + '积分';
+    if (addResult.levelUp) message += ' 🎉 等级提升到 Lv.' + addResult.newLevel + '！';
+    for (const r of addResult.rewards) message += ' ' + r;
+    new Notice(message);
 
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '🙏 感谢祝福';

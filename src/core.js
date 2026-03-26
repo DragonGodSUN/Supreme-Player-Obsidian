@@ -2,15 +2,22 @@ const { Notice } = require("obsidian");
 
 const Core = {
   getDailyNotePath(app) {
-    const dailyNotePlugin = app.internalPlugins?.plugins?.['daily-notes'];
-    if (dailyNotePlugin?.instance) {
-      const moment = window.moment;
-      const folder = dailyNotePlugin.instance.options?.folder || 'Notes/DailyNotes';
-      const format = dailyNotePlugin.instance.options?.format || 'yyyy-MM-dd';
-      const dateStr = moment().format(format);
-      return folder + '/' + dateStr + '.md';
+    let folder = 'Notes/DailyNotes';
+    let format = 'YYYY-MM-DD';
+
+    const dailyNotesPlugin = app.internalPlugins?.plugins?.['daily-notes'];
+    if (dailyNotesPlugin?.enabled && dailyNotesPlugin?.instance?.options) {
+      folder = dailyNotesPlugin.instance.options.folder || folder;
+      format = dailyNotesPlugin.instance.options.format || format;
     }
-    return 'Notes/DailyNotes/' + new Date().toISOString().split('T')[0] + '.md';
+
+    if (!format) format = 'YYYY-MM-DD';
+
+    const moment = window.moment;
+    const dateStr = moment().format(format);
+    const path = `${folder}/${dateStr}.md`;
+    console.log('[Core] Daily note path:', path);
+    return path;
   },
 
   async processTodayNote(plugin, forceReprocess = false) {

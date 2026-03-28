@@ -1,7 +1,7 @@
 {
   "name": "supreme-player",
   "version": "1.0.0",
-  "description": "超越玩家系统 - 自律习惯养成游戏化",
+  "description": "Gamified self-discipline system for Obsidian.",
   "main": "src/main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",

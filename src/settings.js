@@ -1,19 +1,206 @@
-const { PluginSettingTab, Setting, Notice, Modal } = require("obsidian");
+﻿const { PluginSettingTab, Setting, Notice, Modal } = require('obsidian');
+const Core = require('./core');
 const { renderEffectParams, buildEffectFromForm } = require('./utils');
 
 class SupremePlayerSettingTab extends PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
+    this.t = (key, variables) => (this.plugin.t ? this.plugin.t(key, variables) : key);
+  }
+
+  getDefaultPlayerName() {
+    return this.t('settings.defaultPlayerName');
+  }
+
+  getLocalizedText(value, fallback = '') {
+    return this.plugin.dataStore?.getLocalizedText
+      ? this.plugin.dataStore.getLocalizedText(value, fallback)
+      : (value ?? fallback);
+  }
+
+  getPerfectRewardDefaults() {
+    return this.plugin.dataStore?.getLocalizedPerfectRewardDefaults
+      ? this.plugin.dataStore.getLocalizedPerfectRewardDefaults()
+      : {
+          name: this.t('datastore.reward.superDiamond.name'),
+          description: this.t('datastore.reward.superDiamond.desc'),
+          blessingTitle: this.t('datastore.reward.defaultBlessingTitle'),
+          blessingMessage: this.t('datastore.reward.defaultBlessingMessage')
+        };
+  }
+
+  ensureConfig() {
+    if (!this.plugin.dataStore.config) {
+      this.plugin.dataStore.config = this.plugin.dataStore.getDefaultConfig();
+    }
+    return this.plugin.dataStore.config;
+  }
+
+  createModalContent(modal, maxHeight = '70vh') {
+    const content = document.createElement('div');
+    content.style.padding = '20px';
+    content.style.maxHeight = maxHeight;
+    content.style.overflowY = 'auto';
+    modal.contentEl.appendChild(content);
+    return content;
+  }
+
+  createButtonRow() {
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '10px';
+    row.style.marginTop = '20px';
+    return row;
+  }
+
+  createActionButton(text, onClick, className, style = '') {
+    const button = document.createElement('button');
+    button.textContent = text;
+    if (className) button.className = className;
+    if (style) button.style.cssText = style;
+    button.onclick = onClick;
+    return button;
+  }
+
+  getResolvedLanguageLabel() {
+    const language = this.plugin.dataStore?.i18n?.getLanguage?.() || 'en';
+    return language === 'zh' ? this.t('settings.languageZh') : this.t('settings.languageEn');
+  }
+
+  async renderDebugSection(containerEl) {
+    const config = this.ensureConfig();
+    const dailySettings = this.plugin.dataStore.getDailyNotesSettings?.() || null;
+    const dataPath = config.dataFilePath || this.plugin.dataStore.autoDetectDataPath();
+    const templatePath = config.templatePath || this.plugin.dataStore.autoDetectTemplatePath();
+    const normalizedTemplatePath = templatePath.endsWith('.md') ? templatePath : `${templatePath}.md`;
+    const todayNotePath = Core.getDailyNotePath(this.app);
+    const todayNoteFile = await Core.findTodayNoteFile(this.app);
+    const activeFile = this.app.workspace.getActiveFile?.();
+    const adapter = this.app.vault.adapter;
+    const dataExists = await adapter.exists(dataPath);
+    const templateExists = await adapter.exists(normalizedTemplatePath);
+    let parsedRecord = null;
+    let parsedPoints = 0;
+
+    if (todayNoteFile) {
+      try {
+        const noteContent = await this.app.vault.read(todayNoteFile);
+        parsedRecord = this.plugin.parser.parseDailyNote(noteContent, todayNoteFile.basename);
+        parsedPoints = this.plugin.parser.calculatePoints(parsedRecord);
+      } catch (error) {
+        console.error('[Debug] Failed to parse today note:', error);
+      }
+    }
+
+    containerEl.createEl('h3', { text: this.t('settings.debugTitle') });
+    new Setting(containerEl)
+      .setName(this.t('settings.debugMode'))
+      .setDesc(this.t('settings.debugModeDesc'))
+      .addToggle(toggle => {
+        toggle
+          .setValue(Boolean(config.debugMode))
+          .onChange(async value => {
+            config.debugMode = value;
+            await this.plugin.dataStore.saveConfig();
+            this.display();
+          });
+      });
+
+    if (!config.debugMode) {
+      return;
+    }
+
+    const suggestions = [];
+    if (!todayNoteFile) {
+      suggestions.push(this.t('settings.debugSuggestionMissingToday'));
+    }
+    if (!templateExists) {
+      suggestions.push(this.t('settings.debugSuggestionMissingTemplate'));
+    }
+    if (!dataExists) {
+      suggestions.push(this.t('settings.debugSuggestionMissingData'));
+    }
+    if (!dailySettings) {
+      suggestions.push(this.t('settings.debugSuggestionNoPlugin'));
+    }
+    if (!suggestions.length) {
+      suggestions.push(this.t('settings.debugSuggestionHealthy'));
+    }
+
+    const panel = containerEl.createDiv();
+    panel.style.cssText = 'background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 10px; padding: 14px 16px; margin: 10px 0 18px;';
+
+    const title = panel.createDiv();
+    title.style.cssText = 'font-weight: 700; margin-bottom: 10px;';
+    title.textContent = this.t('settings.debugInfoTitle');
+
+    const infoItems = [
+      [this.t('settings.debugResolvedLanguage'), this.getResolvedLanguageLabel()],
+      [this.t('settings.debugLanguageMode'), config.language || 'auto'],
+      [this.t('settings.debugTodayNotePath'), todayNotePath],
+      [this.t('settings.debugTodayNoteFound'), todayNoteFile ? todayNoteFile.path : this.t('common.none')],
+      [this.t('settings.debugTemplatePath'), normalizedTemplatePath],
+      [this.t('settings.debugTemplateExists'), templateExists ? this.t('common.enabled') : this.t('common.disabled')],
+      [this.t('settings.debugDataPath'), dataPath],
+      [this.t('settings.debugDataExists'), dataExists ? this.t('common.enabled') : this.t('common.disabled')],
+      [this.t('settings.debugActiveFile'), activeFile?.path || this.t('common.none')],
+      [this.t('settings.debugDailyFolder'), dailySettings?.folder || this.t('common.none')],
+      [this.t('settings.debugDailyFormat'), dailySettings?.format || 'YYYY-MM-DD'],
+      [this.t('settings.debugParsedMainTasks'), parsedRecord ? `${parsedRecord.mainTasks.filter(item => item.completed).length}/${parsedRecord.mainTasks.length}` : this.t('common.none')],
+      [this.t('settings.debugParsedHabits'), parsedRecord ? `${parsedRecord.habits.filter(item => item.completed).length}/${parsedRecord.habits.length}` : this.t('common.none')],
+      [this.t('settings.debugParsedExtraTasks'), parsedRecord ? `${parsedRecord.extraTasks.filter(item => item.completed).length}/${parsedRecord.extraTasks.length}` : this.t('common.none')],
+      [this.t('settings.debugParsedPomodoros'), parsedRecord ? `${parsedRecord.pomodoros.filter(item => item.completed).length}/${parsedRecord.pomodoros.length}` : this.t('common.none')],
+      [this.t('settings.debugParsedPoints'), parsedRecord ? parsedPoints : this.t('common.none')],
+    ];
+
+    infoItems.forEach(([label, value]) => {
+      const row = panel.createDiv();
+      row.style.cssText = 'display: grid; grid-template-columns: 140px 1fr; gap: 10px; margin-bottom: 6px; font-size: 12px; line-height: 1.6;';
+
+      const labelEl = row.createDiv();
+      labelEl.style.cssText = 'color: var(--text-muted);';
+      labelEl.textContent = label;
+
+      const valueEl = row.createDiv();
+      valueEl.style.cssText = 'word-break: break-all;';
+      valueEl.textContent = String(value);
+    });
+
+    const suggestionTitle = panel.createDiv();
+    suggestionTitle.style.cssText = 'font-weight: 700; margin: 12px 0 8px;';
+    suggestionTitle.textContent = this.t('settings.debugSuggestions');
+
+    suggestions.forEach(text => {
+      const item = panel.createDiv();
+      item.style.cssText = 'font-size: 12px; line-height: 1.7; margin-bottom: 4px;';
+      item.textContent = `• ${text}`;
+    });
+  }
+
+  downloadJson(filename, payload) {
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   setupPathAutocomplete(inputEl, fileExtension) {
     let suggestionEl = null;
-    let currentSuggestions = [];
 
-    const showSuggestions = (suggestions) => {
+    const hideSuggestions = () => {
+      if (suggestionEl) {
+        suggestionEl.remove();
+        suggestionEl = null;
+      }
+    };
+
+    const showSuggestions = suggestions => {
       hideSuggestions();
-      if (suggestions.length === 0) return;
+      if (!suggestions.length) return;
 
       suggestionEl = document.createElement('div');
       suggestionEl.className = 'suggestion-container';
@@ -22,7 +209,7 @@ class SupremePlayerSettingTab extends PluginSettingTab {
         background: var(--background-primary);
         border: 1px solid var(--background-modifier-border);
         border-radius: 4px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         max-height: 200px;
         overflow-y: auto;
         z-index: 10000;
@@ -33,7 +220,7 @@ class SupremePlayerSettingTab extends PluginSettingTab {
       suggestionEl.style.top = `${inputRect.bottom + window.scrollY}px`;
       suggestionEl.style.left = `${inputRect.left + window.scrollX}px`;
 
-      suggestions.forEach((path) => {
+      suggestions.forEach(path => {
         const item = document.createElement('div');
         item.className = 'suggestion-item';
         item.style.cssText = `
@@ -43,8 +230,12 @@ class SupremePlayerSettingTab extends PluginSettingTab {
           font-size: 13px;
         `;
         item.textContent = path;
-        item.onmouseenter = () => { item.style.background = 'var(--background-secondary)'; };
-        item.onmouseleave = () => { item.style.background = 'transparent'; };
+        item.onmouseenter = () => {
+          item.style.background = 'var(--background-secondary)';
+        };
+        item.onmouseleave = () => {
+          item.style.background = 'transparent';
+        };
         item.onclick = () => {
           inputEl.value = path;
           inputEl.dispatchEvent(new Event('input', { bubbles: true }));
@@ -54,130 +245,154 @@ class SupremePlayerSettingTab extends PluginSettingTab {
       });
 
       document.body.appendChild(suggestionEl);
-      currentSuggestions = suggestions;
     };
 
-    const hideSuggestions = () => {
-      if (suggestionEl) {
-        suggestionEl.remove();
-        suggestionEl = null;
-      }
-      currentSuggestions = [];
-    };
-
-    const searchFiles = (query) => {
+    const searchFiles = query => {
       if (!query || query.length < 1) {
         hideSuggestions();
         return;
       }
 
-      const files = this.app.vault.getFiles();
-      const suggestions = [];
       const queryLower = query.toLowerCase();
-
-      for (const file of files) {
+      const suggestions = [];
+      for (const file of this.app.vault.getFiles()) {
         if (fileExtension && !file.path.endsWith(fileExtension)) continue;
         if (file.path.toLowerCase().includes(queryLower)) {
           suggestions.push(file.path);
           if (suggestions.length >= 10) break;
         }
       }
-
       showSuggestions(suggestions);
     };
 
-    inputEl.addEventListener('input', (e) => searchFiles(e.target.value));
-    inputEl.addEventListener('focus', (e) => { if (e.target.value) searchFiles(e.target.value); });
+    inputEl.addEventListener('input', event => searchFiles(event.target.value));
+    inputEl.addEventListener('focus', event => {
+      if (event.target.value) searchFiles(event.target.value);
+    });
     inputEl.addEventListener('blur', () => setTimeout(hideSuggestions, 200));
-    inputEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideSuggestions(); });
+    inputEl.addEventListener('keydown', event => {
+      if (event.key === 'Escape') hideSuggestions();
+    });
   }
 
-  display() {
+  async display() {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl('h2', { text: '🌟 超越玩家系统设置' });
+    containerEl.createEl('h2', { text: this.t('settings.title') });
 
-    containerEl.createEl('h3', { text: '👤 用户信息' });
+    containerEl.createEl('h3', { text: this.t('settings.user') });
     new Setting(containerEl)
-      .setName('玩家名称')
-      .setDesc('设置你的游戏名称，将显示在状态面板中')
+      .setName(this.t('settings.playerName'))
+      .setDesc(this.t('settings.playerNameDesc'))
       .addText(text => {
         const stats = this.plugin.dataStore.getStats();
-        text.setPlaceholder('玩家')
-          .setValue(stats.playerName || '玩家')
-          .onChange(async (value) => {
-            const stats = this.plugin.dataStore.getStats();
-            stats.playerName = value || '玩家';
+        text
+          .setPlaceholder(this.t('settings.playerNamePlaceholder'))
+          .setValue(stats.playerName || this.getDefaultPlayerName())
+          .onChange(async value => {
+            const currentStats = this.plugin.dataStore.getStats();
+            currentStats.playerName = value || this.getDefaultPlayerName();
             await this.plugin.dataStore.save();
           });
         text.inputEl.style.width = '200px';
       });
 
-    containerEl.createEl('h3', { text: '⚙️ 数据存储' });
     new Setting(containerEl)
-      .setName('数据存储位置')
-      .setDesc('账户信息存储文件路径（留空则自动检测日记文件夹）')
+      .setName(this.t('settings.language'))
+      .setDesc(this.t('settings.languageDesc'))
+      .addDropdown(dropdown => {
+        const config = this.ensureConfig();
+        dropdown
+          .addOption('auto', this.t('settings.languageAuto'))
+          .addOption('zh', this.t('settings.languageZh'))
+          .addOption('en', this.t('settings.languageEn'))
+          .setValue(config.language || 'auto')
+          .onChange(async value => {
+            config.language = value || 'auto';
+            await this.plugin.dataStore.saveConfig();
+            this.display();
+          });
+      });
+
+    containerEl.createEl('h3', { text: this.t('settings.data') });
+    new Setting(containerEl)
+      .setName(this.t('settings.dataPath'))
+      .setDesc(this.t('settings.dataPathDesc'))
       .addText(text => {
-        text.setPlaceholder(this.plugin.dataStore.autoDetectDataPath())
+        text
+          .setPlaceholder(this.plugin.dataStore.autoDetectDataPath())
           .setValue(this.plugin.dataStore.config?.dataFilePath || '')
-          .onChange(async (value) => {
-            if (this.plugin.dataStore.config) {
-              this.plugin.dataStore.config.dataFilePath = value;
-              await this.plugin.dataStore.saveConfig();
-            }
+          .onChange(async value => {
+            const config = this.ensureConfig();
+            config.dataFilePath = value;
+            await this.plugin.dataStore.saveConfig();
           });
         this.setupPathAutocomplete(text.inputEl, '.json');
       })
-      .addButton(button => button
-        .setButtonText('🔍 自动检测')
-        .onClick(async () => {
-          const detected = this.plugin.dataStore.autoDetectDataPath();
-          if (this.plugin.dataStore.config) {
-            this.plugin.dataStore.config.dataFilePath = detected;
+      .addButton(button =>
+        button
+          .setButtonText(this.t('template.autoDetect'))
+          .onClick(async () => {
+            const detected = this.plugin.dataStore.autoDetectDataPath();
+            const config = this.ensureConfig();
+            config.dataFilePath = detected;
             await this.plugin.dataStore.saveConfig();
-          }
-          new Notice(`✅ 已检测到: ${detected}`);
-          this.display();
-        }));
+            new Notice(this.t('template.detected', { path: detected }));
+            this.display();
+          })
+      );
 
-    containerEl.createEl('h3', { text: '📝 日记模板' });
+    containerEl.createEl('h3', { text: this.t('settings.template') });
     new Setting(containerEl)
-      .setName('模板文件位置')
-      .setDesc('日记模板文件的路径（留空则自动检测日记模板）')
+      .setName(this.t('settings.templatePath'))
+      .setDesc(this.t('settings.templatePathDesc'))
       .addText(text => {
-        text.setPlaceholder(this.plugin.dataStore.autoDetectTemplatePath())
+        text
+          .setPlaceholder(this.plugin.dataStore.autoDetectTemplatePath())
           .setValue(this.plugin.dataStore.config?.templatePath || '')
-          .onChange(async (value) => {
-            if (this.plugin.dataStore.config) {
-              this.plugin.dataStore.config.templatePath = value;
-              await this.plugin.dataStore.saveConfig();
-            }
+          .onChange(async value => {
+            const config = this.ensureConfig();
+            config.templatePath = value;
+            await this.plugin.dataStore.saveConfig();
           });
         this.setupPathAutocomplete(text.inputEl, '.md');
       })
-      .addButton(button => button
-        .setButtonText('🔍 自动检测')
-        .onClick(async () => {
-          const detected = this.plugin.dataStore.autoDetectTemplatePath();
-          if (this.plugin.dataStore.config) {
-            this.plugin.dataStore.config.templatePath = detected;
+      .addButton(button =>
+        button
+          .setButtonText(this.t('template.autoDetect'))
+          .onClick(async () => {
+            let detected = this.plugin.dataStore.autoDetectTemplatePath();
+            if (!detected.endsWith('.md')) {
+              detected += '.md';
+            }
+
+            const config = this.ensureConfig();
+            config.templatePath = detected;
             await this.plugin.dataStore.saveConfig();
-          }
-          new Notice(`✅ 已检测到: ${detected}`);
-          this.display();
-        }));
+
+            const exists = await this.app.vault.adapter.exists(detected);
+            if (exists) {
+              new Notice(this.t('template.detected', { path: detected }));
+            } else {
+              this.showCreateTemplateConfirm(detected);
+            }
+            this.display();
+          })
+      );
 
     new Setting(containerEl)
-      .setName('更新日记模板')
-      .setDesc('根据当前每日任务配置更新日记模板文件')
-      .addButton(button => button.setButtonText('📝 更新模板').onClick(() => this.updateDailyTemplate()));
+      .setName(this.t('settings.updateTemplate'))
+      .setDesc(this.t('settings.updateTemplateDesc'))
+      .addButton(button => button.setButtonText(this.t('settings.templateButton')).onClick(() => this.updateDailyTemplate()));
+
+    await this.renderDebugSection(containerEl);
 
     new Setting(containerEl)
-      .setName('🔓 解锁编辑功能')
-      .setDesc('需要连续点击42次按钮才能解锁编辑功能，解锁后30分钟自动上锁')
+      .setName(this.t('settings.unlock'))
+      .setDesc(this.t('settings.unlockDesc'))
       .addButton(button => {
-        button.setButtonText(this.plugin.lockState.unlocked ? '🔓 已解锁' : '🔒 点击解锁');
+        button.setButtonText(this.plugin.lockState.unlocked ? this.t('settings.unlockActive') : this.t('settings.clickToUnlock'));
         button.onClick(() => this.handleUnlockClick(button));
       });
 
@@ -194,7 +409,7 @@ class SupremePlayerSettingTab extends PluginSettingTab {
 
       if (timeSinceUnlock < 15000) {
         const remainingSeconds = Math.ceil((15000 - timeSinceUnlock) / 1000);
-        new Notice(`⏳ 请等待 ${remainingSeconds} 秒后才能上锁`);
+        new Notice(this.t('settings.waitToLock', { seconds: remainingSeconds }));
         return;
       }
 
@@ -202,13 +417,13 @@ class SupremePlayerSettingTab extends PluginSettingTab {
         this.plugin.lockState.lockConfirmCount = (this.plugin.lockState.lockConfirmCount || 0) + 1;
         const remaining = 3 - this.plugin.lockState.lockConfirmCount;
         if (remaining > 0) {
-          button.setButtonText(`🔒 确认上锁? (${remaining}次)`);
+          button.setButtonText(this.t('settings.confirmLock', { remaining }));
           return;
         }
       } else {
         this.plugin.lockState.lockConfirmCount = 1;
         this.plugin.lockState.lastLockAttempt = now;
-        button.setButtonText('🔒 确认上锁? (2次)');
+        button.setButtonText(this.t('settings.confirmLock', { remaining: 2 }));
         return;
       }
 
@@ -220,141 +435,125 @@ class SupremePlayerSettingTab extends PluginSettingTab {
         clearTimeout(this.plugin.lockState.autoLockTimer);
         this.plugin.lockState.autoLockTimer = null;
       }
-      button.setButtonText('🔒 点击解锁');
-      new Notice('🔒 编辑功能已上锁');
+      button.setButtonText(this.t('settings.clickToUnlock'));
+      new Notice(this.t('settings.locked'));
       this.display();
       return;
     }
 
-    this.plugin.lockState.clickCount++;
+    this.plugin.lockState.clickCount += 1;
     const remaining = 42 - this.plugin.lockState.clickCount;
 
     if (remaining <= 0) {
       this.plugin.lockState.unlocked = true;
       this.plugin.lockState.unlockTime = Date.now();
       this.plugin.lockState.lockConfirmCount = 0;
-      button.setButtonText('🔓 已解锁');
-      new Notice('🔓 编辑功能已解锁！30分钟后自动上锁');
+      button.setButtonText(this.t('settings.unlockActive'));
+      new Notice(this.t('settings.unlocked'));
 
       this.plugin.lockState.autoLockTimer = setTimeout(() => {
         this.plugin.lockState.unlocked = false;
         this.plugin.lockState.clickCount = 0;
-        new Notice('🔒 编辑功能已自动上锁');
+        new Notice(this.t('settings.autoLocked'));
         this.display();
       }, 30 * 60 * 1000);
 
       this.display();
     } else {
-      button.setButtonText(`🔒 还需点击 ${remaining} 次`);
+      button.setButtonText(this.t('settings.clicksRemaining', { remaining }));
     }
   }
 
   addUnlockedSettings(containerEl) {
-    containerEl.createEl('h3', { text: '⚙ 每日任务配置' });
-
+    containerEl.createEl('h3', { text: this.t('settings.dailyTasks') });
     new Setting(containerEl)
-      .setName('配置每日任务')
-      .setDesc('配置每日任务、习惯、额外任务和番茄钟的数量与积分')
-      .addButton(button => button.setButtonText('⚙️ 配置').onClick(() => this.showDailyTasksConfigModal()));
+      .setName(this.t('settings.dailyTasks'))
+      .setDesc(this.t('settings.dailyTasksDesc'))
+      .addButton(button => button.setButtonText(this.t('common.configure')).onClick(() => this.showDailyTasksConfigModal()));
 
-    containerEl.createEl('h3', { text: '🌟 完美打卡配置' });
-
+    containerEl.createEl('h3', { text: this.t('settings.perfectConfig') });
     new Setting(containerEl)
-      .setName('配置完美打卡奖励')
-      .setDesc('设置完美打卡的奖励物品和祝福语')
-      .addButton(button => button.setButtonText('⚙️ 配置').onClick(() => this.showPerfectCheckInConfigModal()));
+      .setName(this.t('settings.perfectConfig'))
+      .setDesc(this.t('settings.perfectConfigDesc'))
+      .addButton(button => button.setButtonText(this.t('common.configure')).onClick(() => this.showPerfectCheckInConfigModal()));
 
-    containerEl.createEl('h3', { text: '📦 商品管理' });
-
+    containerEl.createEl('h3', { text: this.t('settings.shop') });
     new Setting(containerEl)
-      .setName('添加商品')
-      .setDesc('添加新的自定义商品到商城')
-      .addButton(button => button.setButtonText('➕ 添加').onClick(() => this.showAddItemModal()));
-
+      .setName(this.t('settings.shopAdd'))
+      .setDesc(this.t('settings.shopAddDesc'))
+      .addButton(button => button.setButtonText(this.t('common.add')).onClick(() => this.showAddItemModal()));
     new Setting(containerEl)
-      .setName('编辑商品')
-      .setDesc('编辑已有的自定义商品')
-      .addButton(button => button.setButtonText('✏️ 编辑').onClick(() => this.showEditItemModal()));
-
+      .setName(this.t('settings.shopEdit'))
+      .setDesc(this.t('settings.shopEditDesc'))
+      .addButton(button => button.setButtonText(this.t('common.edit')).onClick(() => this.showEditItemModal()));
     new Setting(containerEl)
-      .setName('删除商品')
-      .setDesc('删除自定义商品')
-      .addButton(button => button.setButtonText('🗑️ 删除').onClick(() => this.showDeleteItemModal()));
-
+      .setName(this.t('settings.shopDelete'))
+      .setDesc(this.t('settings.shopDeleteDesc'))
+      .addButton(button => button.setButtonText(this.t('common.delete')).onClick(() => this.showDeleteItemModal()));
     new Setting(containerEl)
-      .setName('导出商品配置')
-      .setDesc('导出自定义商品配置为JSON文件')
-      .addButton(button => button.setButtonText('📤 导出').onClick(() => this.exportShopConfig()));
-
+      .setName(this.t('settings.shopExport'))
+      .setDesc(this.t('settings.shopExportDesc'))
+      .addButton(button => button.setButtonText(this.t('common.export')).onClick(() => this.exportShopConfig()));
     new Setting(containerEl)
-      .setName('导入商品配置')
-      .setDesc('从JSON文件导入商品配置')
-      .addButton(button => button.setButtonText('📥 导入').onClick(() => this.importShopConfig()));
+      .setName(this.t('settings.shopImport'))
+      .setDesc(this.t('settings.shopImportDesc'))
+      .addButton(button => button.setButtonText(this.t('common.import')).onClick(() => this.importShopConfig()));
 
-    containerEl.createEl('h3', { text: '📊 等级管理' });
-
+    containerEl.createEl('h3', { text: this.t('settings.levels') });
     new Setting(containerEl)
-      .setName('编辑等级称号')
-      .setDesc('编辑各等级的称号、能力和阶段')
-      .addButton(button => button.setButtonText('✏️ 编辑').onClick(() => this.showEditLevelsModal()));
-
+      .setName(this.t('settings.levelsEdit'))
+      .setDesc(this.t('settings.levelsEditDesc'))
+      .addButton(button => button.setButtonText(this.t('common.edit')).onClick(() => this.showEditLevelsModal()));
     new Setting(containerEl)
-      .setName('添加新等级')
-      .setDesc('添加新的等级配置')
-      .addButton(button => button.setButtonText('➕ 添加').onClick(() => this.showAddLevelModal()));
+      .setName(this.t('settings.levelsAdd'))
+      .setDesc(this.t('settings.levelsAddDesc'))
+      .addButton(button => button.setButtonText(this.t('common.add')).onClick(() => this.showAddLevelModal()));
 
-    containerEl.createEl('h3', { text: '💰 货币管理' });
-
+    containerEl.createEl('h3', { text: this.t('settings.currencies') });
     new Setting(containerEl)
-      .setName('管理货币')
-      .setDesc('查看和管理所有货币类型')
-      .addButton(button => button.setButtonText('💰 管理').onClick(() => this.showManageCurrenciesModal()));
+      .setName(this.t('settings.currencies'))
+      .setDesc(this.t('settings.currenciesDesc'))
+      .addButton(button => button.setButtonText(this.t('common.manage')).onClick(() => this.showManageCurrenciesModal()));
 
-    containerEl.createEl('h3', { text: '📤 数据导入导出' });
-
+    containerEl.createEl('h3', { text: this.t('settings.dataIO') });
     new Setting(containerEl)
-      .setName('导出数据')
-      .setDesc('导出所有账户数据为JSON文件')
-      .addButton(button => button.setButtonText('📤 导出').onClick(async () => {
+      .setName(this.t('settings.exportData'))
+      .setDesc(this.t('settings.exportDataDesc'))
+      .addButton(button => button.setButtonText(this.t('common.export')).onClick(async () => {
         const data = await this.plugin.dataStore.exportData();
-        const blob = new Blob([data], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'supreme-player-backup-' + new Date().toISOString().split('T')[0] + '.json';
-        a.click();
-        URL.revokeObjectURL(url);
-        new Notice('✅ 数据已导出！');
+        const filename = `supreme-player-backup-${new Date().toISOString().split('T')[0]}.json`;
+        this.downloadJson(filename, data);
+        new Notice(this.t('settings.dataExported'));
       }));
 
     new Setting(containerEl)
-      .setName('导入数据')
-      .setDesc('从JSON文件导入账户数据')
-      .addButton(button => button.setButtonText('📥 导入').onClick(() => {
+      .setName(this.t('settings.importData'))
+      .setDesc(this.t('settings.importDataDesc'))
+      .addButton(button => button.setButtonText(this.t('common.import')).onClick(() => {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';
-        input.onchange = async (e) => {
-          const file = e.target.files[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-              const result = await this.plugin.dataStore.importData(e.target.result);
-              new Notice(result.message);
-              if (result.success) {
-                Core.updateStatusBar(this.plugin);
-                this.display();
-              }
-            };
-            reader.readAsText(file);
-          }
+        input.onchange = async event => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = async loadEvent => {
+            const result = await this.plugin.dataStore.importData(loadEvent.target.result);
+            new Notice(result.message);
+            if (result.success) {
+              Core.updateStatusBar(this.plugin);
+              this.display();
+            }
+          };
+          reader.readAsText(file);
         };
         input.click();
       }));
   }
 
   showDailyTasksConfigModal() {
-    const config = this.plugin.dataStore.config || this.plugin.dataStore.getDefaultConfig();
+    const config = this.ensureConfig();
     const dailyTasks = config.dailyTasks || {
       mainTasks: { count: 3, pointsPerTask: 100 },
       habits: { items: [] },
@@ -363,67 +562,67 @@ class SupremePlayerSettingTab extends PluginSettingTab {
     };
 
     const modal = new Modal(this.app);
-    modal.titleEl.setText('📋 每日任务配置');
-
-    const content = document.createElement('div');
-    content.style.padding = '20px';
-    content.style.maxHeight = '70vh';
-    content.style.overflowY = 'auto';
+    modal.titleEl.setText(this.t('settings.dailyTaskModalTitle'));
+    const content = this.createModalContent(modal);
 
     content.innerHTML = `
       <div style="background: var(--background-secondary); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-        <div style="font-weight: bold; margin-bottom: 10px; color: #ffaa00;">★ 每日三件事</div>
-        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+        <div style="font-weight: bold; margin-bottom: 10px;">${this.t('settings.mainTasks')}</div>
+        <div style="display: flex; gap: 10px;">
           <div style="flex: 1;">
-            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">任务数量</div>
+            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.taskCount')}</div>
             <input type="number" id="main-count" value="${dailyTasks.mainTasks?.count || 3}" min="1" max="10" style="width: 100%;">
           </div>
           <div style="flex: 1;">
-            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">每任务积分</div>
+            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.pointsPerTask')}</div>
             <input type="number" id="main-points" value="${dailyTasks.mainTasks?.pointsPerTask || 100}" min="1" style="width: 100%;">
           </div>
         </div>
       </div>
 
       <div style="background: var(--background-secondary); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-        <div style="font-weight: bold; margin-bottom: 10px; color: #00aaff;">● 习惯打卡</div>
+        <div style="font-weight: bold; margin-bottom: 10px;">${this.t('settings.habitList')}</div>
         <div id="habits-container" style="margin-bottom: 10px;"></div>
-        <button id="add-habit-btn" style="width: 100%; padding: 8px; background: var(--interactive-accent); color: white; border: none; border-radius: 5px; cursor: pointer;">➕ 添加习惯</button>
+        <button id="add-habit-btn" style="width: 100%; padding: 8px; background: var(--interactive-accent); color: white; border: none; border-radius: 5px; cursor: pointer;">${this.t('settings.addHabit')}</button>
       </div>
 
       <div style="background: var(--background-secondary); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-        <div style="font-weight: bold; margin-bottom: 10px; color: #9966ff;">● 额外任务</div>
+        <div style="font-weight: bold; margin-bottom: 10px;">${this.t('settings.extraTasks')}</div>
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
           <div style="flex: 1;">
-            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">计分数量</div>
+            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.taskCount')}</div>
             <input type="number" id="extra-count" value="${dailyTasks.extraTasks?.count || 2}" min="1" max="10" style="width: 100%;">
           </div>
           <div style="flex: 1;">
-            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">每任务积分</div>
+            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.pointsPerTask')}</div>
             <input type="number" id="extra-points" value="${dailyTasks.extraTasks?.pointsPerTask || 50}" min="1" style="width: 100%;">
           </div>
         </div>
-        <div id="extra-max-display" style="font-size: 12px; color: #888;">最大积分：<span id="extra-max-value">${(dailyTasks.extraTasks?.count || 2) * (dailyTasks.extraTasks?.pointsPerTask || 50)}</span></div>
+        <div id="extra-max-display" style="font-size: 12px; color: #888;">${this.t('settings.maxPoints', {
+          value: (dailyTasks.extraTasks?.count || 2) * (dailyTasks.extraTasks?.pointsPerTask || 50)
+        })}</div>
       </div>
 
       <div style="background: var(--background-secondary); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-        <div style="font-weight: bold; margin-bottom: 10px; color: #ff6666;">⏰ 专注番茄钟</div>
+        <div style="font-weight: bold; margin-bottom: 10px;">${this.t('settings.pomodoro')}</div>
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
           <div style="flex: 1;">
-            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">番茄钟数量</div>
+            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.taskCount')}</div>
             <input type="number" id="pomodoro-count" value="${dailyTasks.pomodoro?.count || 6}" min="1" max="12" style="width: 100%;">
           </div>
           <div style="flex: 1;">
-            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">每个积分</div>
+            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.pointsPerPomodoro')}</div>
             <input type="number" id="pomodoro-points" value="${dailyTasks.pomodoro?.pointsPerPomodoro || 50}" min="1" style="width: 100%;">
           </div>
         </div>
-        <div id="pomodoro-max-display" style="font-size: 12px; color: #888;">最大积分：<span id="pomodoro-max-value">${(dailyTasks.pomodoro?.count || 6) * (dailyTasks.pomodoro?.pointsPerPomodoro || 50)}</span></div>
+        <div id="pomodoro-max-display" style="font-size: 12px; color: #888;">${this.t('settings.maxPoints', {
+          value: (dailyTasks.pomodoro?.count || 6) * (dailyTasks.pomodoro?.pointsPerPomodoro || 50)
+        })}</div>
       </div>
     `;
 
     const habitsContainer = content.querySelector('#habits-container');
-    const habits = dailyTasks.habits?.items || [];
+    const habits = [...(dailyTasks.habits?.items || [])];
 
     const renderHabits = () => {
       habitsContainer.innerHTML = '';
@@ -431,30 +630,30 @@ class SupremePlayerSettingTab extends PluginSettingTab {
         const habitDiv = document.createElement('div');
         habitDiv.style.cssText = 'display: flex; gap: 10px; margin-bottom: 8px; align-items: center;';
         habitDiv.innerHTML = `
-          <input type="text" value="${habit.name}" placeholder="习惯名称" class="habit-name" data-index="${index}" style="flex: 1;">
-          <input type="number" value="${habit.points}" placeholder="积分" class="habit-points" data-index="${index}" style="width: 80px;">
-          <button class="remove-habit-btn" data-index="${index}" style="background: #ff6666; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer;">✕</button>
+          <input type="text" value="${habit.name}" placeholder="${this.t('settings.habitNamePlaceholder')}" class="habit-name" data-index="${index}" style="flex: 1;">
+          <input type="number" value="${habit.points}" placeholder="${this.t('effect.value')}" class="habit-points" data-index="${index}" style="width: 80px;">
+          <button class="remove-habit-btn" data-index="${index}" style="background: #ff6666; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer;">×</button>
         `;
         habitsContainer.appendChild(habitDiv);
       });
 
-      habitsContainer.querySelectorAll('.remove-habit-btn').forEach(btn => {
-        btn.onclick = (e) => {
-          const idx = parseInt(e.target.dataset.index);
-          habits.splice(idx, 1);
+      habitsContainer.querySelectorAll('.remove-habit-btn').forEach(button => {
+        button.onclick = event => {
+          const index = parseInt(event.target.dataset.index, 10);
+          habits.splice(index, 1);
           renderHabits();
         };
       });
 
       habitsContainer.querySelectorAll('.habit-name').forEach(input => {
-        input.onchange = (e) => {
-          habits[parseInt(e.target.dataset.index)].name = e.target.value;
+        input.onchange = event => {
+          habits[parseInt(event.target.dataset.index, 10)].name = event.target.value;
         };
       });
 
       habitsContainer.querySelectorAll('.habit-points').forEach(input => {
-        input.onchange = (e) => {
-          habits[parseInt(e.target.dataset.index)].points = parseInt(e.target.value) || 10;
+        input.onchange = event => {
+          habits[parseInt(event.target.dataset.index, 10)].points = parseInt(event.target.value, 10) || 10;
         };
       });
     };
@@ -462,175 +661,148 @@ class SupremePlayerSettingTab extends PluginSettingTab {
     renderHabits();
 
     content.querySelector('#add-habit-btn').onclick = () => {
-      habits.push({ name: '新习惯', points: 10 });
+      habits.push({ name: this.t('settings.habitNewName'), points: 10 });
       renderHabits();
     };
 
     const extraCountInput = content.querySelector('#extra-count');
     const extraPointsInput = content.querySelector('#extra-points');
-    const extraMaxValue = content.querySelector('#extra-max-value');
+    const extraMaxDisplay = content.querySelector('#extra-max-display');
+    const pomodoroCountInput = content.querySelector('#pomodoro-count');
+    const pomodoroPointsInput = content.querySelector('#pomodoro-points');
+    const pomodoroMaxDisplay = content.querySelector('#pomodoro-max-display');
 
     const updateExtraMax = () => {
-      const count = parseInt(extraCountInput.value) || 2;
-      const points = parseInt(extraPointsInput.value) || 20;
-      extraMaxValue.textContent = count * points;
+      const count = parseInt(extraCountInput.value, 10) || 2;
+      const points = parseInt(extraPointsInput.value, 10) || 50;
+      extraMaxDisplay.textContent = this.t('settings.maxPoints', { value: count * points });
+    };
+
+    const updatePomodoroMax = () => {
+      const count = parseInt(pomodoroCountInput.value, 10) || 6;
+      const points = parseInt(pomodoroPointsInput.value, 10) || 50;
+      pomodoroMaxDisplay.textContent = this.t('settings.maxPoints', { value: count * points });
     };
 
     extraCountInput.oninput = updateExtraMax;
     extraPointsInput.oninput = updateExtraMax;
-
-    const pomodoroCountInput = content.querySelector('#pomodoro-count');
-    const pomodoroPointsInput = content.querySelector('#pomodoro-points');
-    const pomodoroMaxValue = content.querySelector('#pomodoro-max-value');
-
-    const updatePomodoroMax = () => {
-      const count = parseInt(pomodoroCountInput.value) || 6;
-      const points = parseInt(pomodoroPointsInput.value) || 50;
-      pomodoroMaxValue.textContent = count * points;
-    };
-
     pomodoroCountInput.oninput = updatePomodoroMax;
     pomodoroPointsInput.oninput = updatePomodoroMax;
 
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
-    buttonContainer.style.marginTop = '20px';
-
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = '💾 保存配置';
-    confirmBtn.className = 'mod-cta';
-    confirmBtn.style.flex = '1';
-    confirmBtn.onclick = async () => {
-      if (!this.plugin.dataStore.config) this.plugin.dataStore.config = this.plugin.dataStore.getDefaultConfig();
-
-      const extraCount = parseInt(extraCountInput.value) || 2;
-      const extraPoints = parseInt(extraPointsInput.value) || 20;
-      const pomodoroCount = parseInt(pomodoroCountInput.value) || 6;
-      const pomodoroPoints = parseInt(pomodoroPointsInput.value) || 50;
-
-      this.plugin.dataStore.config.dailyTasks = {
+    const buttonRow = this.createButtonRow();
+    buttonRow.appendChild(this.createActionButton(this.t('common.save'), async () => {
+      config.dailyTasks = {
         mainTasks: {
-          count: parseInt(content.querySelector('#main-count').value) || 3,
-          pointsPerTask: parseInt(content.querySelector('#main-points').value) || 50
+          count: parseInt(content.querySelector('#main-count').value, 10) || 3,
+          pointsPerTask: parseInt(content.querySelector('#main-points').value, 10) || 100
         },
         habits: { items: habits },
         extraTasks: {
-          count: extraCount,
-          pointsPerTask: extraPoints
+          count: parseInt(extraCountInput.value, 10) || 2,
+          pointsPerTask: parseInt(extraPointsInput.value, 10) || 50
         },
         pomodoro: {
-          count: pomodoroCount,
-          pointsPerPomodoro: pomodoroPoints
+          count: parseInt(pomodoroCountInput.value, 10) || 6,
+          pointsPerPomodoro: parseInt(pomodoroPointsInput.value, 10) || 50
         }
       };
-
       await this.plugin.dataStore.saveConfig();
-      new Notice('✅ 每日任务配置已保存！');
+      new Notice(this.t('settings.dailyTasksSaved'));
       modal.close();
-    };
+    }, 'mod-cta', 'flex: 1;'));
+    buttonRow.appendChild(this.createActionButton(this.t('common.cancel'), () => modal.close(), '', 'flex: 1;'));
+    content.appendChild(buttonRow);
 
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '取消';
-    cancelBtn.style.flex = '1';
-    cancelBtn.onclick = () => modal.close();
-
-    buttonContainer.appendChild(confirmBtn);
-    buttonContainer.appendChild(cancelBtn);
-    content.appendChild(buttonContainer);
-
-    modal.contentEl.appendChild(content);
     modal.open();
   }
 
   showPerfectCheckInConfigModal() {
-    const config = this.plugin.dataStore.config || this.plugin.dataStore.getDefaultConfig();
-    const perfectReward = config.perfectCheckInReward || {
+    const config = this.ensureConfig();
+    const rewardDefaults = this.getPerfectRewardDefaults();
+    const rewardConfig = config.perfectCheckInReward || {
       enabled: true,
-      rewardType: 'shop',
+      rewardType: 'exclusive',
       shopItemId: null,
       exclusiveItem: {
-        name: '超级大钻石',
+        name: rewardDefaults.name,
         icon: '💎',
-        description: '完美打卡奖励，使用后获得好运Buff',
+        description: rewardDefaults.description,
         rarity: 'legendary',
-        effect: { type: 'buff', buffName: '好运', buffDuration: 12 }
+        category: 'system',
+        effect: { type: 'super_diamond' }
       },
-      blessingTitle: '太棒了！今日任务全部完成！',
-      blessingMessage: '每一次完美打卡，都是对自己最好的投资！'
+      blessingTitle: rewardDefaults.blessingTitle,
+      blessingMessage: rewardDefaults.blessingMessage
     };
+    const perfectReward = this.plugin.dataStore.getLocalizedPerfectReward
+      ? this.plugin.dataStore.getLocalizedPerfectReward(rewardConfig)
+      : rewardConfig;
 
     const shopItems = this.plugin.dataStore.getShopItems() || [];
-    const shopOptions = shopItems.map(item =>
-      `<option value="${item.id}" ${perfectReward.shopItemId === item.id ? 'selected' : ''}>${item.icon} ${item.name}</option>`
-    ).join('');
+    const shopOptions = shopItems.map(item => `<option value="${item.id}" ${perfectReward.shopItemId === item.id ? 'selected' : ''}>${item.icon} ${item.name}</option>`).join('');
 
     const modal = new Modal(this.app);
-    modal.titleEl.setText('🌟 完美打卡配置');
-
-    const content = document.createElement('div');
-    content.style.padding = '20px';
-    content.style.maxHeight = '500px';
-    content.style.overflowY = 'auto';
+    modal.titleEl.setText(this.t('settings.perfectConfigModalTitle'));
+    const content = this.createModalContent(modal, '500px');
 
     content.innerHTML = `
       <div style="margin-bottom: 15px;">
-        <div style="font-size: 12px; color: #888; margin-bottom: 5px;">奖励类型</div>
+        <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.rewardType')}</div>
         <select id="reward-type" style="width: 100%;">
-          <option value="shop" ${perfectReward.rewardType === 'shop' ? 'selected' : ''}>🎁 商城商品</option>
-          <option value="exclusive" ${perfectReward.rewardType === 'exclusive' ? 'selected' : ''}>⭐ 特殊商品（仅完美打卡可获得）</option>
+          <option value="shop" ${perfectReward.rewardType === 'shop' ? 'selected' : ''}>${this.t('settings.rewardShop')}</option>
+          <option value="exclusive" ${perfectReward.rewardType === 'exclusive' ? 'selected' : ''}>${this.t('settings.rewardExclusive')}</option>
         </select>
       </div>
 
       <div id="shop-reward-section" style="${perfectReward.rewardType === 'shop' ? '' : 'display: none;'}">
-        <div style="font-size: 12px; color: #888; margin-bottom: 5px;">选择商城商品</div>
-        <select id="shop-item-select" style="width: 100%;">
-          <option value="">-- 请选择商品 --</option>
+        <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.selectShopItem')}</div>
+        <select id="shop-item-select" style="width: 100%; margin-bottom: 15px;">
+          <option value="">-- ${this.t('common.select')} --</option>
           ${shopOptions}
         </select>
       </div>
 
       <div id="exclusive-reward-section" style="${perfectReward.rewardType === 'exclusive' ? '' : 'display: none;'}">
         <div style="background: var(--background-secondary); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-          <div style="font-weight: bold; margin-bottom: 10px; color: #ffd700;">⭐ 特殊商品配置</div>
-          <div style="font-size: 11px; color: #888; margin-bottom: 10px;">此类商品只能在完美打卡时获得，无法在商城购买</div>
+          <div style="font-weight: bold; margin-bottom: 10px;">${this.t('settings.exclusiveConfig')}</div>
+          <div style="font-size: 11px; color: #888; margin-bottom: 10px;">${this.t('settings.exclusiveHint')}</div>
           <div style="margin-bottom: 10px;">
-            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">商品名称</div>
-            <input type="text" id="exclusive-name" value="${perfectReward.exclusiveItem?.name || '超级大钻石'}" style="width: 100%;">
+            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.itemName')}</div>
+            <input type="text" id="exclusive-name" value="${perfectReward.exclusiveItem?.name || this.getLocalizedText(rewardDefaults.name, this.t('datastore.reward.superDiamond.name'))}" style="width: 100%;">
           </div>
           <div style="margin-bottom: 10px;">
-            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">商品图标</div>
+            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.itemIcon')}</div>
             <input type="text" id="exclusive-icon" value="${perfectReward.exclusiveItem?.icon || '💎'}" style="width: 100%;">
           </div>
           <div style="margin-bottom: 10px;">
-            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">商品描述</div>
-            <input type="text" id="exclusive-desc" value="${perfectReward.exclusiveItem?.description || '完美打卡奖励'}" style="width: 100%;">
+            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.itemDescription')}</div>
+            <input type="text" id="exclusive-desc" value="${perfectReward.exclusiveItem?.description || ''}" style="width: 100%;">
           </div>
           <div style="margin-bottom: 10px;">
-            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">稀有度</div>
+            <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('common.rarity')}</div>
             <select id="exclusive-rarity" style="width: 100%;">
-              <option value="rare" ${perfectReward.exclusiveItem?.rarity === 'rare' ? 'selected' : ''}>🎴 稀有</option>
-              <option value="legendary" ${perfectReward.exclusiveItem?.rarity === 'legendary' ? 'selected' : ''}>🌠 传奇</option>
+              <option value="rare" ${perfectReward.exclusiveItem?.rarity === 'rare' ? 'selected' : ''}>${this.t('rarity.rare')}</option>
+              <option value="legendary" ${perfectReward.exclusiveItem?.rarity === 'legendary' ? 'selected' : ''}>${this.t('rarity.legendary')}</option>
             </select>
           </div>
         </div>
       </div>
 
       <div style="background: var(--background-secondary); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-        <div style="font-weight: bold; margin-bottom: 15px;">✨ 祝福语配置</div>
+        <div style="font-weight: bold; margin-bottom: 15px;">${this.t('settings.blessingConfig')}</div>
         <div style="margin-bottom: 10px;">
-          <div style="font-size: 12px; color: #888; margin-bottom: 5px;">祝福标题</div>
-          <input type="text" id="blessing-title" value="${perfectReward.blessingTitle || '太棒了！今日任务全部完成！'}" style="width: 100%;">
+          <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.blessingTitle')}</div>
+          <input type="text" id="blessing-title" value="${perfectReward.blessingTitle || ''}" style="width: 100%;">
         </div>
         <div style="margin-bottom: 10px;">
-          <div style="font-size: 12px; color: #888; margin-bottom: 5px;">祝福语</div>
-          <textarea id="blessing-message" style="width: 100%; height: 60px;">${perfectReward.blessingMessage || '每一次完美打卡，都是对自己最好的投资！'}</textarea>
+          <div style="font-size: 12px; color: #888; margin-bottom: 5px;">${this.t('settings.blessingMessage')}</div>
+          <textarea id="blessing-message" style="width: 100%; height: 60px;">${perfectReward.blessingMessage || ''}</textarea>
         </div>
       </div>
 
-      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
         <input type="checkbox" id="reward-enabled" ${perfectReward.enabled !== false ? 'checked' : ''}>
-        <label for="reward-enabled" style="font-size: 13px;">启用完美打卡奖励</label>
+        <label for="reward-enabled">${this.t('settings.enablePerfectReward')}</label>
       </div>
     `;
 
@@ -639,107 +811,82 @@ class SupremePlayerSettingTab extends PluginSettingTab {
     const exclusiveRewardSection = content.querySelector('#exclusive-reward-section');
 
     rewardTypeSelect.onchange = () => {
-      if (rewardTypeSelect.value === 'shop') {
-        shopRewardSection.style.display = '';
-        exclusiveRewardSection.style.display = 'none';
-      } else {
-        shopRewardSection.style.display = 'none';
-        exclusiveRewardSection.style.display = '';
-      }
+      const isShop = rewardTypeSelect.value === 'shop';
+      shopRewardSection.style.display = isShop ? '' : 'none';
+      exclusiveRewardSection.style.display = isShop ? 'none' : '';
     };
 
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
-
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = '💾 保存配置';
-    confirmBtn.className = 'mod-cta';
-    confirmBtn.style.flex = '1';
-    confirmBtn.onclick = async () => {
-      if (!this.plugin.dataStore.config) {
-        this.plugin.dataStore.config = this.plugin.dataStore.getDefaultConfig();
-      }
-
+    const buttonRow = this.createButtonRow();
+    buttonRow.appendChild(this.createActionButton(this.t('common.save'), async () => {
       const rewardType = content.querySelector('#reward-type').value;
-      const exclusiveItem = {
-        name: content.querySelector('#exclusive-name').value.trim() || '超级大钻石',
-        icon: content.querySelector('#exclusive-icon').value.trim() || '💎',
-        description: content.querySelector('#exclusive-desc').value.trim() || '完美打卡奖励',
-        rarity: content.querySelector('#exclusive-rarity').value,
-        effect: { type: 'buff', buffName: '好运', buffDuration: 12 }
-      };
-
-      this.plugin.dataStore.config.perfectCheckInReward = {
+      const currentReward = config.perfectCheckInReward || {};
+      const currentExclusive = currentReward.exclusiveItem || {};
+      config.perfectCheckInReward = {
         enabled: content.querySelector('#reward-enabled').checked,
-        rewardType: rewardType,
+        rewardType,
         shopItemId: rewardType === 'shop' ? content.querySelector('#shop-item-select').value : null,
-        exclusiveItem: rewardType === 'exclusive' ? exclusiveItem : null,
-        blessingTitle: content.querySelector('#blessing-title').value.trim() || '太棒了！',
-        blessingMessage: content.querySelector('#blessing-message').value.trim() || '完美打卡！'
+        exclusiveItem: rewardType === 'exclusive'
+          ? {
+              name: this.plugin.dataStore.updateLocalizedValue(currentExclusive.name, content.querySelector('#exclusive-name').value.trim() || this.getLocalizedText(rewardDefaults.name, this.t('datastore.reward.superDiamond.name'))),
+              icon: content.querySelector('#exclusive-icon').value.trim() || '💎',
+              description: this.plugin.dataStore.updateLocalizedValue(currentExclusive.description, content.querySelector('#exclusive-desc').value.trim()),
+              rarity: content.querySelector('#exclusive-rarity').value,
+              category: 'system',
+              effect: { type: 'super_diamond' }
+            }
+          : null,
+        blessingTitle: this.plugin.dataStore.updateLocalizedValue(currentReward.blessingTitle, content.querySelector('#blessing-title').value.trim() || this.getLocalizedText(rewardDefaults.blessingTitle, this.t('datastore.reward.defaultBlessingTitle'))),
+        blessingMessage: this.plugin.dataStore.updateLocalizedValue(currentReward.blessingMessage, content.querySelector('#blessing-message').value.trim() || this.getLocalizedText(rewardDefaults.blessingMessage, this.t('datastore.reward.defaultBlessingMessage')))
       };
-
       await this.plugin.dataStore.saveConfig();
-      new Notice('✅ 完美打卡配置已保存！');
+      new Notice(this.t('settings.perfectConfigSaved'));
       modal.close();
-    };
+    }, 'mod-cta', 'flex: 1;'));
+    buttonRow.appendChild(this.createActionButton(this.t('common.cancel'), () => modal.close(), '', 'flex: 1;'));
+    content.appendChild(buttonRow);
 
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '取消';
-    cancelBtn.style.flex = '1';
-    cancelBtn.onclick = () => modal.close();
-
-    buttonContainer.appendChild(confirmBtn);
-    buttonContainer.appendChild(cancelBtn);
-    content.appendChild(buttonContainer);
-
-    modal.contentEl.appendChild(content);
     modal.open();
   }
 
   showAddItemModal() {
     const modal = new Modal(this.app);
-    modal.titleEl.setText('➕ 添加商品');
-
-    const content = document.createElement('div');
-    content.style.padding = '20px';
-    content.style.maxHeight = '70vh';
-    content.style.overflowY = 'auto';
+    modal.titleEl.setText(this.t('settings.addItemTitle'));
+    const content = this.createModalContent(modal);
 
     content.innerHTML = `
-      <div style="margin-bottom: 5px;">商品名称：</div>
-      <input type="text" id="item-name" placeholder="例如：神秘福袋" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">商品描述：</div>
-      <input type="text" id="item-desc" placeholder="商品效果或承诺描述" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">图标（emoji）：</div>
-      <input type="text" id="item-icon" placeholder="例如：🎁" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.itemName')}</div>
+      <input type="text" id="item-name" placeholder="${this.t('settings.itemNameInputPlaceholder')}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.itemDescription')}</div>
+      <input type="text" id="item-desc" placeholder="${this.t('settings.itemDescInputPlaceholder')}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.itemIcon')}</div>
+      <input type="text" id="item-icon" placeholder="${this.t('settings.itemIconPlaceholder')}" style="width: 100%; margin-bottom: 15px;">
       <div style="display: flex; gap: 10px; margin-bottom: 15px;">
         <div style="flex: 1;">
-          <div style="margin-bottom: 5px;">价格：</div>
-          <input type="number" id="item-price" placeholder="1" min="1" style="width: 100%;">
+          <div style="margin-bottom: 5px;">${this.t('common.price')}</div>
+          <input type="number" id="item-price" value="1" min="1" style="width: 100%;">
         </div>
         <div style="flex: 1;">
-          <div style="margin-bottom: 5px;">品质：</div>
+          <div style="margin-bottom: 5px;">${this.t('common.rarity')}</div>
           <select id="item-rarity" style="width: 100%;">
-            <option value="rare">🎴 稀有</option>
-            <option value="legendary">🌠 传奇</option>
+            <option value="rare">${this.t('rarity.rare')}</option>
+            <option value="legendary">${this.t('rarity.legendary')}</option>
           </select>
         </div>
       </div>
-      <div style="margin-bottom: 5px;">商品分类：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.itemCategory')}</div>
       <select id="item-category" style="width: 100%; margin-bottom: 15px;">
-        <option value="system">⚙️ 系统商品（自动生效）</option>
-        <option value="external">📝 外部商品（需自行兑现）</option>
+        <option value="system">${this.t('settings.systemItem')}</option>
+        <option value="external">${this.t('settings.externalItem')}</option>
       </select>
       <div id="effect-config" style="background: var(--background-secondary); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-        <div style="font-weight: bold; margin-bottom: 10px;">🎁 奖励效果配置</div>
-        <div style="margin-bottom: 5px;">效果类型：</div>
+        <div style="font-weight: bold; margin-bottom: 10px;">${this.t('settings.effectConfig')}</div>
+        <div style="margin-bottom: 5px;">${this.t('settings.effectType')}</div>
         <select id="effect-type" style="width: 100%; margin-bottom: 15px;">
-          <option value="add_wish_stars">⭐ 获得愿星</option>
-          <option value="add_level">🌟 获得等级</option>
-          <option value="buff">🔮 获得Buff效果</option>
-          <option value="random_wish_stars">🎁 随机愿星</option>
-          <option value="add_points">⚡ 获得积分</option>
+          <option value="add_wish_stars">${this.t('effect.addWishStars')}</option>
+          <option value="add_level">${this.t('effect.addLevel')}</option>
+          <option value="buff">${this.t('effect.buff')}</option>
+          <option value="random_wish_stars">${this.t('effect.randomWishStars')}</option>
+          <option value="add_points">${this.t('effect.addPoints')}</option>
         </select>
         <div id="effect-params"></div>
       </div>
@@ -750,115 +897,98 @@ class SupremePlayerSettingTab extends PluginSettingTab {
     const categorySelect = content.querySelector('#item-category');
     const effectConfig = content.querySelector('#effect-config');
 
-    const renderEffectParamsFn = () => renderEffectParams(effectTypeSelect.value, effectParams);
-
+    const renderEffect = () => renderEffectParams(effectTypeSelect.value, effectParams, this.t);
     const toggleEffectConfig = () => {
-      const isExternal = categorySelect.value === 'external';
-      effectConfig.style.display = isExternal ? 'none' : 'block';
+      effectConfig.style.display = categorySelect.value === 'external' ? 'none' : 'block';
     };
 
-    effectTypeSelect.onchange = renderEffectParamsFn;
+    effectTypeSelect.onchange = renderEffect;
     categorySelect.onchange = toggleEffectConfig;
-    renderEffectParamsFn();
+    renderEffect();
     toggleEffectConfig();
 
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
+    const buttonRow = this.createButtonRow();
+    buttonRow.appendChild(this.createActionButton(this.t('common.add'), async () => {
+      const name = content.querySelector('#item-name').value.trim();
+      if (!name) {
+        new Notice(this.t('settings.enterItemName'));
+        return;
+      }
 
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = '✅ 添加';
-    confirmBtn.className = 'mod-cta';
-    confirmBtn.style.flex = '1';
-    confirmBtn.onclick = async () => {
-      const name = document.getElementById('item-name').value.trim();
-      if (!name) { new Notice('❌ 请输入商品名称'); return; }
-
-      const category = document.getElementById('item-category').value;
-      const effect = buildEffectFromForm(category, document.getElementById('effect-type').value);
-      if (category === 'system' && effect === null && document.getElementById('effect-type').value === 'buff') return;
+      const category = content.querySelector('#item-category').value;
+      const effect = buildEffectFromForm(category, effectTypeSelect.value, this.t);
+      if (category === 'system' && effect === null && effectTypeSelect.value === 'buff') {
+        return;
+      }
 
       const result = await this.plugin.dataStore.addShopItem(
         name,
-        document.getElementById('item-desc').value.trim(),
+        content.querySelector('#item-desc').value.trim(),
         category,
         'consumable',
-        parseInt(document.getElementById('item-price').value) || 1,
-        document.getElementById('item-rarity').value,
-        document.getElementById('item-icon').value.trim() || '📦',
+        parseInt(content.querySelector('#item-price').value, 10) || 1,
+        content.querySelector('#item-rarity').value,
+        content.querySelector('#item-icon').value.trim() || '🎁',
         effect
       );
       new Notice(result.message);
-      if (result.success) modal.close();
-    };
+      if (result.success) {
+        modal.close();
+      }
+    }, 'mod-cta', 'flex: 1;'));
+    buttonRow.appendChild(this.createActionButton(this.t('common.cancel'), () => modal.close(), '', 'flex: 1;'));
+    content.appendChild(buttonRow);
 
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '取消';
-    cancelBtn.style.flex = '1';
-    cancelBtn.onclick = () => modal.close();
-
-    buttonContainer.appendChild(confirmBtn);
-    buttonContainer.appendChild(cancelBtn);
-    content.appendChild(buttonContainer);
-
-    modal.contentEl.appendChild(content);
     modal.open();
   }
 
   showEditItemModal() {
     const allItems = this.plugin.dataStore.getShopItems();
-
-    if (allItems.length === 0) {
-      new Notice('📭 暂无商品可编辑');
+    if (!allItems.length) {
+      new Notice(this.t('settings.noEditableItems'));
       return;
     }
 
     const modal = new Modal(this.app);
-    modal.titleEl.setText('✏️ 编辑商品');
-
-    const content = document.createElement('div');
-    content.style.padding = '20px';
-    content.style.maxHeight = '500px';
-    content.style.overflowY = 'auto';
+    modal.titleEl.setText(this.t('settings.editItemTitle'));
+    const content = this.createModalContent(modal, '500px');
 
     content.innerHTML = `
-      <div style="margin-bottom: 5px;">选择商品：</div>
+      <div style="margin-bottom: 5px;">${this.t('common.select')}</div>
       <select id="item-select" style="width: 100%; margin-bottom: 15px;">
         ${allItems.map(item => `<option value="${item.id}">${item.icon} ${item.name}</option>`).join('')}
       </select>
-      <div style="margin-bottom: 5px;">商品名称：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.itemName')}</div>
       <input type="text" id="item-name" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">商品描述：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.itemDescription')}</div>
       <input type="text" id="item-desc" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">图标：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.itemIcon')}</div>
       <input type="text" id="item-icon" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">价格：</div>
+      <div style="margin-bottom: 5px;">${this.t('common.price')}</div>
       <input type="number" id="item-price" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">稀有度：</div>
+      <div style="margin-bottom: 5px;">${this.t('common.rarity')}</div>
       <select id="item-rarity" style="width: 100%; margin-bottom: 15px;">
-        <option value="rare">🎴 稀有</option>
-        <option value="legendary">🌠 传奇</option>
+        <option value="rare">${this.t('rarity.rare')}</option>
+        <option value="legendary">${this.t('rarity.legendary')}</option>
       </select>
-      <div style="margin-bottom: 5px;">商品类型：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.itemCategory')}</div>
       <select id="item-category" style="width: 100%; margin-bottom: 20px;">
-        <option value="system">系统商品（自动生效）</option>
-        <option value="external">外部商品（手动兑现）</option>
+        <option value="system">${this.t('settings.systemItem')}</option>
+        <option value="external">${this.t('settings.externalItem')}</option>
       </select>
       <div id="effect-section">
-        <div style="font-weight: bold; margin-bottom: 10px;">🎁 奖励效果配置</div>
-        <div style="margin-bottom: 5px;">效果类型：</div>
+        <div style="font-weight: bold; margin-bottom: 10px;">${this.t('settings.effectConfig')}</div>
+        <div style="margin-bottom: 5px;">${this.t('settings.effectType')}</div>
         <select id="effect-type" style="width: 100%; margin-bottom: 15px;">
-          <option value="add_wish_stars">⭐ 获得愿星</option>
-          <option value="add_level">🌟 获得等级</option>
-          <option value="buff">🔮 获得Buff效果</option>
-          <option value="random_wish_stars">🎁 随机愿星</option>
-          <option value="add_points">⚡ 获得积分</option>
+          <option value="add_wish_stars">${this.t('effect.addWishStars')}</option>
+          <option value="add_level">${this.t('effect.addLevel')}</option>
+          <option value="buff">${this.t('effect.buff')}</option>
+          <option value="random_wish_stars">${this.t('effect.randomWishStars')}</option>
+          <option value="add_points">${this.t('effect.addPoints')}</option>
         </select>
         <div id="effect-params"></div>
       </div>
     `;
-
-    modal.contentEl.appendChild(content);
 
     const itemSelect = content.querySelector('#item-select');
     const itemName = content.querySelector('#item-name');
@@ -871,253 +1001,207 @@ class SupremePlayerSettingTab extends PluginSettingTab {
     const effectSection = content.querySelector('#effect-section');
     const effectParams = content.querySelector('#effect-params');
 
-    const renderEffectParamsFn = () => renderEffectParams(effectTypeSelect.value, effectParams);
+    const renderEffect = () => renderEffectParams(effectTypeSelect.value, effectParams, this.t);
 
     const loadItem = () => {
-      const item = allItems.find(i => i.id === itemSelect.value);
-      if (item) {
-        itemName.value = item.name;
-        itemDesc.value = item.description || '';
-        itemIcon.value = item.icon;
-        itemPrice.value = item.price;
-        itemRarity.value = item.rarity || 'rare';
-        itemCategory.value = item.category || 'system';
-        
-        const category = item.category || 'system';
-        effectSection.style.display = category === 'external' ? 'none' : 'block';
-        
-        if (item.effect) {
-          effectTypeSelect.value = item.effect.type;
-          renderEffectParamsFn();
-          if (item.effect.type === 'add_wish_stars' || item.effect.type === 'add_level' || item.effect.type === 'add_points') {
-            const valueInput = effectParams.querySelector('#effect-value');
-            if (valueInput) valueInput.value = item.effect.value || 1;
-          } else if (item.effect.type === 'buff') {
-            const buffName = effectParams.querySelector('#buff-name');
-            const buffIcon = effectParams.querySelector('#buff-icon');
-            const buffDesc = effectParams.querySelector('#buff-desc');
-            const buffDuration = effectParams.querySelector('#buff-duration');
-            if (buffName) buffName.value = item.effect.buffName || '';
-            if (buffIcon) buffIcon.value = item.effect.buffIcon || '';
-            if (buffDesc) buffDesc.value = item.effect.buffDesc || '';
-            if (buffDuration) buffDuration.value = item.effect.duration || 24;
-          } else if (item.effect.type === 'random_wish_stars') {
-            const minInput = effectParams.querySelector('#effect-min');
-            const maxInput = effectParams.querySelector('#effect-max');
-            if (minInput) minInput.value = item.effect.min || 1;
-            if (maxInput) maxInput.value = item.effect.max || 5;
-          }
-        }
+      const item = allItems.find(entry => entry.id === itemSelect.value);
+      if (!item) return;
+
+      itemName.value = item.name;
+      itemDesc.value = item.description || '';
+      itemIcon.value = item.icon || '🎁';
+      itemPrice.value = item.price || 1;
+      itemRarity.value = item.rarity || 'rare';
+      itemCategory.value = item.category || 'system';
+
+      effectSection.style.display = itemCategory.value === 'external' ? 'none' : 'block';
+
+      const effectType = item.effect?.type || 'add_wish_stars';
+      effectTypeSelect.value = effectType;
+      renderEffect();
+
+      if (!item.effect) return;
+
+      if (effectType === 'add_wish_stars' || effectType === 'add_level' || effectType === 'add_points') {
+        const valueInput = effectParams.querySelector('#effect-value');
+        if (valueInput) valueInput.value = item.effect.value || 1;
+      } else if (effectType === 'buff') {
+        const buffName = effectParams.querySelector('#buff-name');
+        const buffIcon = effectParams.querySelector('#buff-icon');
+        const buffDesc = effectParams.querySelector('#buff-desc');
+        const buffDuration = effectParams.querySelector('#buff-duration');
+        if (buffName) buffName.value = item.effect.buffName || '';
+        if (buffIcon) buffIcon.value = item.effect.buffIcon || '';
+        if (buffDesc) buffDesc.value = item.effect.buffDesc || '';
+        if (buffDuration) buffDuration.value = item.effect.duration || item.effect.buffDuration || 24;
+      } else if (effectType === 'random_wish_stars') {
+        const minInput = effectParams.querySelector('#effect-min');
+        const maxInput = effectParams.querySelector('#effect-max');
+        if (minInput) minInput.value = item.effect.min || 1;
+        if (maxInput) maxInput.value = item.effect.max || 5;
       }
     };
 
-    const toggleEffectConfig = () => {
-      const isExternal = itemCategory.value === 'external';
-      effectSection.style.display = isExternal ? 'none' : 'block';
+    effectTypeSelect.onchange = renderEffect;
+    itemCategory.onchange = () => {
+      effectSection.style.display = itemCategory.value === 'external' ? 'none' : 'block';
     };
-
-    effectTypeSelect.onchange = renderEffectParamsFn;
-    itemCategory.onchange = toggleEffectConfig;
     itemSelect.onchange = loadItem;
-    
     loadItem();
 
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
-
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = '💾 保存';
-    confirmBtn.className = 'mod-cta';
-    confirmBtn.style.flex = '1';
-    confirmBtn.onclick = async () => {
+    const buttonRow = this.createButtonRow();
+    buttonRow.appendChild(this.createActionButton(this.t('common.save'), async () => {
       const category = itemCategory.value;
-      const effect = buildEffectFromForm(category, effectTypeSelect.value);
+      const effect = buildEffectFromForm(category, effectTypeSelect.value, this.t);
+      if (category === 'system' && effect === null && effectTypeSelect.value === 'buff') {
+        return;
+      }
 
       const result = await this.plugin.dataStore.updateShopItem(itemSelect.value, {
         name: itemName.value.trim(),
         description: itemDesc.value.trim(),
-        icon: itemIcon.value.trim() || '📦',
-        price: parseInt(itemPrice.value) || 1,
+        icon: itemIcon.value.trim() || '🎁',
+        price: parseInt(itemPrice.value, 10) || 1,
         rarity: itemRarity.value,
-        category: category,
-        effect: effect
+        category,
+        effect
       });
       new Notice(result.message);
-      if (result.success) modal.close();
-    };
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '取消';
-    cancelBtn.style.flex = '1';
-    cancelBtn.onclick = () => modal.close();
-
-    buttonContainer.appendChild(confirmBtn);
-    buttonContainer.appendChild(cancelBtn);
-    content.appendChild(buttonContainer);
+      if (result.success) {
+        modal.close();
+      }
+    }, 'mod-cta', 'flex: 1;'));
+    buttonRow.appendChild(this.createActionButton(this.t('common.cancel'), () => modal.close(), '', 'flex: 1;'));
+    content.appendChild(buttonRow);
 
     modal.open();
   }
 
   showDeleteItemModal() {
     const allItems = this.plugin.dataStore.getShopItems();
-
-    if (allItems.length === 0) {
-      new Notice('📭 暂无商品可删除');
+    if (!allItems.length) {
+      new Notice(this.t('settings.noDeletableItems'));
       return;
     }
 
     const modal = new Modal(this.app);
-    modal.titleEl.setText('🗑️ 删除商品');
-
-    const content = document.createElement('div');
-    content.style.padding = '20px';
+    modal.titleEl.setText(this.t('settings.deleteItemTitle'));
+    const content = this.createModalContent(modal, 'unset');
 
     content.innerHTML = `
-      <div style="margin-bottom: 5px;">选择要删除的商品：</div>
+      <div style="margin-bottom: 5px;">${this.t('common.select')}</div>
       <select id="item-select" style="width: 100%; margin-bottom: 20px;">
         ${allItems.map(item => `<option value="${item.id}">${item.icon} ${item.name}</option>`).join('')}
       </select>
-      <div style="color: #ff6666; font-size: 12px; margin-bottom: 15px;">⚠️ 删除后无法恢复，请谨慎操作</div>
+      <div style="color: #ff6666; font-size: 12px; margin-bottom: 15px;">${this.t('settings.deleteWarning')}</div>
     `;
 
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
-
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = '🗑️ 删除';
-    confirmBtn.style.cssText = 'background-color: #ff6666; color: white; flex: 1;';
-    confirmBtn.onclick = async () => {
-      const result = await this.plugin.dataStore.deleteShopItem(document.getElementById('item-select').value);
+    const buttonRow = this.createButtonRow();
+    buttonRow.appendChild(this.createActionButton(this.t('common.delete'), async () => {
+      const result = await this.plugin.dataStore.deleteShopItem(content.querySelector('#item-select').value);
       new Notice(result.message);
-      if (result.success) modal.close();
-    };
+      if (result.success) {
+        modal.close();
+      }
+    }, '', 'background-color: #ff6666; color: white; flex: 1;'));
+    buttonRow.appendChild(this.createActionButton(this.t('common.cancel'), () => modal.close(), '', 'flex: 1;'));
+    content.appendChild(buttonRow);
 
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '取消';
-    cancelBtn.style.flex = '1';
-    cancelBtn.onclick = () => modal.close();
-
-    buttonContainer.appendChild(confirmBtn);
-    buttonContainer.appendChild(cancelBtn);
-    content.appendChild(buttonContainer);
-
-    modal.contentEl.appendChild(content);
     modal.open();
   }
 
   showEditLevelsModal() {
-    const config = this.plugin.dataStore.config || this.plugin.dataStore.getDefaultConfig();
+    const config = this.ensureConfig();
     const levels = config.levels || [];
 
     const modal = new Modal(this.app);
-    modal.titleEl.setText('📊 编辑等级称号');
+    modal.titleEl.setText(this.t('settings.editLevelsTitle'));
+    const content = this.createModalContent(modal, 'unset');
 
-    const content = document.createElement('div');
-    content.style.padding = '20px';
-
-    const levelList = document.createElement('div');
-    levelList.style.cssText = 'max-height: 400px; overflow-y: auto;';
+    const list = document.createElement('div');
+    list.style.cssText = 'max-height: 400px; overflow-y: auto;';
 
     levels.forEach((levelConfig, index) => {
+      const displayLevel = this.plugin.dataStore.getLocalizedLevelConfig(levelConfig, index);
       const levelDiv = document.createElement('div');
-      levelDiv.style.cssText = `padding: 15px; margin-bottom: 10px; border: 1px solid var(--border-color); border-radius: 8px; border-left: 4px solid ${levelConfig.color || '#ffffff'}; cursor: pointer;`;
+      levelDiv.style.cssText = `padding: 15px; margin-bottom: 10px; border: 1px solid var(--background-modifier-border); border-radius: 8px; border-left: 4px solid ${displayLevel.color || '#ffffff'}; cursor: pointer;`;
       levelDiv.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-          <div style="font-weight: bold; font-size: 16px;">${levelConfig.title}</div>
-          <div style="color: #888; font-size: 12px;">Lv.${levelConfig.minLevel} - ${levelConfig.maxLevel === 999 ? '∞' : levelConfig.maxLevel}</div>
+          <div style="font-weight: bold; font-size: 16px;">${displayLevel.title}</div>
+          <div style="color: #888; font-size: 12px;">${
+            displayLevel.maxLevel === 999
+              ? this.t('settings.levelRangeInfinite', { min: displayLevel.minLevel })
+              : this.t('settings.levelRange', { min: displayLevel.minLevel, max: displayLevel.maxLevel })
+          }</div>
         </div>
-        <div style="color: #666; font-size: 12px;">能力：${levelConfig.ability}</div>
-        <div style="color: #666; font-size: 12px;">阶段：${levelConfig.phase}</div>
+        <div style="color: #666; font-size: 12px;">${this.t('settings.levelAbility', { value: displayLevel.ability || '' })}</div>
+        <div style="color: #666; font-size: 12px;">${this.t('settings.levelPhase', { value: displayLevel.phase || '' })}</div>
       `;
       levelDiv.onclick = () => this.showEditLevelDetailModal(index, levelConfig);
-      levelList.appendChild(levelDiv);
+      list.appendChild(levelDiv);
     });
 
-    content.appendChild(levelList);
+    content.appendChild(list);
+    content.appendChild(this.createActionButton(this.t('common.close'), () => modal.close(), '', 'width: 100%; margin-top: 10px;'));
 
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '关闭';
-    closeBtn.style.width = '100%';
-    closeBtn.style.marginTop = '10px';
-    closeBtn.onclick = () => modal.close();
-    content.appendChild(closeBtn);
-
-    modal.contentEl.appendChild(content);
     modal.open();
   }
 
   showEditLevelDetailModal(index, levelConfig) {
+    const displayLevel = this.plugin.dataStore.getLocalizedLevelConfig(levelConfig, index);
     const modal = new Modal(this.app);
-    modal.titleEl.setText('✏️ 编辑等级：' + levelConfig.title);
-
-    const content = document.createElement('div');
-    content.style.padding = '20px';
+    modal.titleEl.setText(this.t('settings.editLevelTitle', { title: displayLevel.title }));
+    const content = this.createModalContent(modal, 'unset');
 
     content.innerHTML = `
-      <div style="margin-bottom: 5px;">称号：</div>
-      <input type="text" id="level-title" value="${levelConfig.title}" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">能力：</div>
-      <input type="text" id="level-ability" value="${levelConfig.ability}" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">能力图标：</div>
-      <input type="text" id="level-ability-icon" value="${levelConfig.abilityIcon || '⚔️'}" style="width: 100%; margin-bottom: 15px;" placeholder="⚔️">
-      <div style="margin-bottom: 5px;">阶段：</div>
-      <input type="text" id="level-phase" value="${levelConfig.phase}" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">阶段图标：</div>
-      <input type="text" id="level-phase-icon" value="${levelConfig.phaseIcon || '👑'}" style="width: 100%; margin-bottom: 15px;" placeholder="👑">
-      <div style="margin-bottom: 5px;">颜色（十六进制）：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.levelTitle')}</div>
+      <input type="text" id="level-title" value="${displayLevel.title}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.levelAbilityLabel')}</div>
+      <input type="text" id="level-ability" value="${displayLevel.ability || ''}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.levelAbilityIcon')}</div>
+      <input type="text" id="level-ability-icon" value="${levelConfig.abilityIcon || '✨'}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.levelPhaseLabel')}</div>
+      <input type="text" id="level-phase" value="${displayLevel.phase || ''}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.levelPhaseIcon')}</div>
+      <input type="text" id="level-phase-icon" value="${levelConfig.phaseIcon || '🌟'}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.levelColor')}</div>
       <input type="text" id="level-color" value="${levelConfig.color || '#ffffff'}" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">最小等级：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.levelMin')}</div>
       <input type="number" id="level-min" value="${levelConfig.minLevel}" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">最大等级：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.levelMax')}</div>
       <input type="number" id="level-max" value="${levelConfig.maxLevel}" style="width: 100%; margin-bottom: 20px;">
       <div id="delete-section" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--background-modifier-border);"></div>
     `;
 
-    modal.contentEl.appendChild(content);
-
-    const titleInput = content.querySelector('#level-title');
-    const abilityInput = content.querySelector('#level-ability');
-    const abilityIconInput = content.querySelector('#level-ability-icon');
-    const phaseInput = content.querySelector('#level-phase');
-    const phaseIconInput = content.querySelector('#level-phase-icon');
-    const colorInput = content.querySelector('#level-color');
-    const minInput = content.querySelector('#level-min');
-    const maxInput = content.querySelector('#level-max');
-    const deleteSection = content.querySelector('#delete-section');
-
     let deleteConfirmCount = 0;
     let deleteConfirmTimer = null;
+    const deleteSection = content.querySelector('#delete-section');
+    const deleteButton = this.createActionButton(
+      this.t('settings.deleteLevel'),
+      () => {
+        deleteConfirmCount += 1;
+        if (deleteConfirmCount === 1) {
+          deleteButton.textContent = this.t('settings.deleteClickAgain');
+          deleteButton.style.background = '#ff4444';
+          deleteConfirmTimer = setTimeout(() => {
+            deleteConfirmCount = 0;
+            deleteButton.textContent = this.t('settings.deleteLevel');
+            deleteButton.style.background = '#ff6666';
+          }, 3000);
+          return;
+        }
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.textContent = '🗑️ 删除此等级';
-    deleteBtn.style.width = '100%';
-    deleteBtn.style.background = '#ff6666';
-    deleteBtn.style.color = 'white';
-    deleteBtn.style.border = 'none';
-    deleteBtn.style.padding = '10px';
-    deleteBtn.style.borderRadius = '5px';
-    deleteBtn.style.cursor = 'pointer';
+        if (deleteConfirmCount === 2) {
+          deleteButton.textContent = this.t('settings.deleteClickFinal');
+          deleteButton.style.background = '#cc0000';
+          deleteConfirmTimer = setTimeout(() => {
+            deleteConfirmCount = 0;
+            deleteButton.textContent = this.t('settings.deleteLevel');
+            deleteButton.style.background = '#ff6666';
+          }, 3000);
+          return;
+        }
 
-    const resetDeleteButton = () => {
-      deleteConfirmCount = 0;
-      deleteBtn.textContent = '🗑️ 删除此等级';
-      deleteBtn.style.background = '#ff6666';
-    };
-
-    deleteBtn.onclick = () => {
-      deleteConfirmCount++;
-      if (deleteConfirmCount === 1) {
-        deleteBtn.textContent = '⚠️ 确定删除？再点2次';
-        deleteBtn.style.background = '#ff4444';
-        deleteConfirmTimer = setTimeout(resetDeleteButton, 3000);
-      } else if (deleteConfirmCount === 2) {
-        if (deleteConfirmTimer) clearTimeout(deleteConfirmTimer);
-        deleteBtn.textContent = '⚠️ 再次确认！再点1次';
-        deleteBtn.style.background = '#cc0000';
-        deleteConfirmTimer = setTimeout(resetDeleteButton, 3000);
-      } else if (deleteConfirmCount >= 3) {
         if (deleteConfirmTimer) clearTimeout(deleteConfirmTimer);
         this.plugin.dataStore.deleteLevelConfig(index).then(result => {
           new Notice(result.message);
@@ -1126,365 +1210,328 @@ class SupremePlayerSettingTab extends PluginSettingTab {
             this.showEditLevelsModal();
           }
         });
-      }
-    };
+      },
+      '',
+      'width: 100%; background: #ff6666; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer;'
+    );
+    deleteSection.appendChild(deleteButton);
 
-    deleteSection.appendChild(deleteBtn);
-
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
-    buttonContainer.style.marginTop = '15px';
-
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = '💾 保存';
-    confirmBtn.className = 'mod-cta';
-    confirmBtn.style.flex = '1';
-    confirmBtn.onclick = async () => {
+    const buttonRow = this.createButtonRow();
+    buttonRow.appendChild(this.createActionButton(this.t('common.save'), async () => {
       const result = await this.plugin.dataStore.updateLevelConfig(index, {
-        title: titleInput.value.trim(),
-        ability: abilityInput.value.trim(),
-        abilityIcon: abilityIconInput.value.trim() || '⚔️',
-        phase: phaseInput.value.trim(),
-        phaseIcon: phaseIconInput.value.trim() || '👑',
-        color: colorInput.value.trim(),
-        minLevel: parseInt(minInput.value) || 0,
-        maxLevel: parseInt(maxInput.value) || 999
+        title: content.querySelector('#level-title').value.trim(),
+        ability: content.querySelector('#level-ability').value.trim(),
+        abilityIcon: content.querySelector('#level-ability-icon').value.trim() || '✨',
+        phase: content.querySelector('#level-phase').value.trim(),
+        phaseIcon: content.querySelector('#level-phase-icon').value.trim() || '🌟',
+        color: content.querySelector('#level-color').value.trim() || '#ffffff',
+        minLevel: parseInt(content.querySelector('#level-min').value, 10) || 0,
+        maxLevel: parseInt(content.querySelector('#level-max').value, 10) || 999
       });
       new Notice(result.message);
-      if (result.success) modal.close();
-    };
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '取消';
-    cancelBtn.style.flex = '1';
-    cancelBtn.onclick = () => modal.close();
-
-    buttonContainer.appendChild(confirmBtn);
-    buttonContainer.appendChild(cancelBtn);
-    content.appendChild(buttonContainer);
+      if (result.success) {
+        modal.close();
+      }
+    }, 'mod-cta', 'flex: 1;'));
+    buttonRow.appendChild(this.createActionButton(this.t('common.cancel'), () => modal.close(), '', 'flex: 1;'));
+    content.appendChild(buttonRow);
 
     modal.open();
   }
 
   showAddLevelModal() {
     const modal = new Modal(this.app);
-    modal.titleEl.setText('➕ 添加新等级');
-
-    const content = document.createElement('div');
-    content.style.padding = '20px';
+    modal.titleEl.setText(this.t('settings.addLevelTitle'));
+    const content = this.createModalContent(modal, 'unset');
 
     content.innerHTML = `
-      <div style="margin-bottom: 5px;">称号：</div>
-      <input type="text" id="level-title" placeholder="例如：星辰使者" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">能力：</div>
-      <input type="text" id="level-ability" placeholder="例如：星河指引-导航" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">能力图标：</div>
-      <input type="text" id="level-ability-icon" placeholder="⚔️" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">阶段：</div>
-      <input type="text" id="level-phase" placeholder="例如：星使" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">阶段图标：</div>
-      <input type="text" id="level-phase-icon" placeholder="👑" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">颜色：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.levelTitle')}</div>
+      <input type="text" id="level-title" placeholder="${this.t('settings.levelTitlePlaceholder')}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.levelAbilityLabel')}</div>
+      <input type="text" id="level-ability" placeholder="${this.t('settings.levelAbilityPlaceholder')}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.levelAbilityIcon')}</div>
+      <input type="text" id="level-ability-icon" placeholder="✨" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.levelPhaseLabel')}</div>
+      <input type="text" id="level-phase" placeholder="${this.t('settings.levelPhasePlaceholder')}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.levelPhaseIcon')}</div>
+      <input type="text" id="level-phase-icon" placeholder="🌟" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.levelColor')}</div>
       <input type="text" id="level-color" placeholder="#ffffff" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">最小等级：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.levelMin')}</div>
       <input type="number" id="level-min" placeholder="0" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">最大等级：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.levelMax')}</div>
       <input type="number" id="level-max" placeholder="999" style="width: 100%; margin-bottom: 20px;">
     `;
 
-    modal.contentEl.appendChild(content);
-
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
-
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = '✅ 添加';
-    confirmBtn.className = 'mod-cta';
-    confirmBtn.style.flex = '1';
-    confirmBtn.onclick = async () => {
+    const buttonRow = this.createButtonRow();
+    buttonRow.appendChild(this.createActionButton(this.t('common.add'), async () => {
       const title = content.querySelector('#level-title').value.trim();
-      if (!title) { new Notice('❌ 请输入称号'); return; }
+      if (!title) {
+        new Notice(this.t('settings.enterLevelTitle'));
+        return;
+      }
+
       const result = await this.plugin.dataStore.addLevelConfig({
-        minLevel: parseInt(content.querySelector('#level-min').value) || 0,
-        maxLevel: parseInt(content.querySelector('#level-max').value) || 999,
-        title: title,
+        minLevel: parseInt(content.querySelector('#level-min').value, 10) || 0,
+        maxLevel: parseInt(content.querySelector('#level-max').value, 10) || 999,
+        title,
         ability: content.querySelector('#level-ability').value.trim(),
-        abilityIcon: content.querySelector('#level-ability-icon').value.trim() || '⚔️',
+        abilityIcon: content.querySelector('#level-ability-icon').value.trim() || '✨',
         phase: content.querySelector('#level-phase').value.trim(),
-        phaseIcon: content.querySelector('#level-phase-icon').value.trim() || '👑',
+        phaseIcon: content.querySelector('#level-phase-icon').value.trim() || '🌟',
         color: content.querySelector('#level-color').value.trim() || '#ffffff'
       });
       new Notice(result.message);
-      if (result.success) modal.close();
-    };
+      if (result.success) {
+        modal.close();
+      }
+    }, 'mod-cta', 'flex: 1;'));
+    buttonRow.appendChild(this.createActionButton(this.t('common.cancel'), () => modal.close(), '', 'flex: 1;'));
+    content.appendChild(buttonRow);
 
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '取消';
-    cancelBtn.style.flex = '1';
-    cancelBtn.onclick = () => modal.close();
-
-    buttonContainer.appendChild(confirmBtn);
-    buttonContainer.appendChild(cancelBtn);
-    content.appendChild(buttonContainer);
-
-    modal.contentEl.appendChild(content);
     modal.open();
   }
 
   showManageCurrenciesModal() {
     const currencies = this.plugin.dataStore.getCurrencies();
+    const stats = this.plugin.dataStore.getStats();
 
     const modal = new Modal(this.app);
-    modal.titleEl.setText('💰 管理货币');
-
-    const content = document.createElement('div');
-    content.style.padding = '20px';
+    modal.titleEl.setText(this.t('settings.manageCurrenciesTitle'));
+    const content = this.createModalContent(modal, 'unset');
 
     const currencyList = document.createElement('div');
     currencyList.style.cssText = 'max-height: 400px; overflow-y: auto;';
 
     currencies.forEach(currency => {
-      const stats = this.plugin.dataStore.getStats();
-      const currentAmount = stats[currency.id] || 0;
-
       const currencyDiv = document.createElement('div');
-      currencyDiv.style.cssText = `padding: 15px; margin-bottom: 10px; border: 1px solid var(--border-color); border-radius: 8px; border-left: 4px solid ${currency.color || '#ffffff'};`;
-      if (currency.editable) currencyDiv.style.cursor = 'pointer';
+      currencyDiv.style.cssText = `padding: 15px; margin-bottom: 10px; border: 1px solid var(--background-modifier-border); border-radius: 8px; border-left: 4px solid ${currency.color || '#ffffff'};`;
+      if (currency.editable) {
+        currencyDiv.style.cursor = 'pointer';
+        currencyDiv.onclick = () => this.showEditCurrencyModal(currency);
+      }
 
       currencyDiv.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div><span style="font-size: 20px; margin-right: 10px;">${currency.icon}</span><strong>${currency.name}</strong>${currency.editable ? '<span style="color: #888; font-size: 10px; margin-left: 5px;">可编辑</span>' : ''}</div>
-          <div style="text-align: right;"><div style="font-weight: bold;">${currentAmount}</div><div style="color: #888; font-size: 10px;">每${currency.earnRate}积分+${currency.earnAmount}</div></div>
+          <div>
+            <span style="font-size: 20px; margin-right: 10px;">${currency.icon}</span>
+            <strong>${currency.name}</strong>
+            ${currency.editable ? `<span style="color: #888; font-size: 10px; margin-left: 5px;">${this.t('settings.currencyEditable')}</span>` : ''}
+          </div>
+          <div style="text-align: right;">
+            <div style="font-weight: bold;">${stats[currency.id] || 0}</div>
+            <div style="color: #888; font-size: 10px;">${this.t('settings.currencyGainRule', {
+              rate: currency.earnRate,
+              amount: currency.earnAmount || 1
+            })}</div>
+          </div>
         </div>
-        <div style="color: #666; font-size: 12px; margin-top: 5px;">${currency.description}</div>
+        <div style="color: #666; font-size: 12px; margin-top: 5px;">${currency.description || ''}</div>
       `;
 
-      if (currency.editable) currencyDiv.onclick = () => this.showEditCurrencyModal(currency);
       currencyList.appendChild(currencyDiv);
     });
 
     content.appendChild(currencyList);
+    content.appendChild(this.createActionButton(this.t('common.add'), () => this.showAddCurrencyModal(), '', 'width: 100%; margin-top: 10px;'));
+    content.appendChild(this.createActionButton(this.t('common.close'), () => modal.close(), '', 'width: 100%; margin-top: 10px;'));
 
-    const addBtn = document.createElement('button');
-    addBtn.textContent = '➕ 添加新货币';
-    addBtn.style.width = '100%';
-    addBtn.style.marginTop = '10px';
-    addBtn.onclick = () => this.showAddCurrencyModal();
-    content.appendChild(addBtn);
-
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '关闭';
-    closeBtn.style.width = '100%';
-    closeBtn.style.marginTop = '10px';
-    closeBtn.onclick = () => modal.close();
-    content.appendChild(closeBtn);
-
-    modal.contentEl.appendChild(content);
     modal.open();
   }
 
   showEditCurrencyModal(currency) {
     const modal = new Modal(this.app);
-    modal.titleEl.setText('✏️ 编辑货币：' + currency.name);
-
-    const content = document.createElement('div');
-    content.style.padding = '20px';
+    modal.titleEl.setText(this.t('settings.editCurrencyTitle', { name: currency.name }));
+    const content = this.createModalContent(modal, 'unset');
 
     content.innerHTML = `
-      <div style="margin-bottom: 5px;">名称：</div>
+      <div style="margin-bottom: 5px;">${this.t('common.name')}</div>
       <input type="text" id="currency-name" value="${currency.name}" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">图标：</div>
+      <div style="margin-bottom: 5px;">${this.t('common.icon')}</div>
       <input type="text" id="currency-icon" value="${currency.icon}" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">描述：</div>
-      <input type="text" id="currency-desc" value="${currency.description}" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">获取间隔（积分）：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.currencyDescription')}</div>
+      <input type="text" id="currency-desc" value="${currency.description || ''}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.currencyRate')}</div>
       <input type="number" id="currency-rate" value="${currency.earnRate}" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">颜色：</div>
+      <div style="margin-bottom: 5px;">${this.t('settings.currencyColor')}</div>
       <input type="text" id="currency-color" value="${currency.color || '#ffffff'}" style="width: 100%; margin-bottom: 20px;">
     `;
 
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
-
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = '💾 保存';
-    confirmBtn.className = 'mod-cta';
-    confirmBtn.style.flex = '1';
-    confirmBtn.onclick = async () => {
+    const buttonRow = this.createButtonRow();
+    buttonRow.appendChild(this.createActionButton(this.t('common.save'), async () => {
       const result = await this.plugin.dataStore.updateCurrency(currency.id, {
-        name: document.getElementById('currency-name').value.trim(),
-        icon: document.getElementById('currency-icon').value.trim(),
-        description: document.getElementById('currency-desc').value.trim(),
-        earnRate: parseInt(document.getElementById('currency-rate').value) || 1000,
-        color: document.getElementById('currency-color').value.trim()
+        name: content.querySelector('#currency-name').value.trim(),
+        icon: content.querySelector('#currency-icon').value.trim(),
+        description: content.querySelector('#currency-desc').value.trim(),
+        earnRate: parseInt(content.querySelector('#currency-rate').value, 10) || 1000,
+        color: content.querySelector('#currency-color').value.trim()
       });
       new Notice(result.message);
-      if (result.success) modal.close();
-    };
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.textContent = '🗑️ 删除';
-    deleteBtn.style.cssText = 'background-color: #ff6666; color: white; flex: 1;';
-    deleteBtn.onclick = async () => {
+      if (result.success) {
+        modal.close();
+      }
+    }, 'mod-cta', 'flex: 1;'));
+    buttonRow.appendChild(this.createActionButton(this.t('common.delete'), async () => {
       const result = await this.plugin.dataStore.deleteCurrency(currency.id);
       new Notice(result.message);
-      if (result.success) modal.close();
-    };
+      if (result.success) {
+        modal.close();
+      }
+    }, '', 'background-color: #ff6666; color: white; flex: 1;'));
+    buttonRow.appendChild(this.createActionButton(this.t('common.cancel'), () => modal.close(), '', 'flex: 1;'));
+    content.appendChild(buttonRow);
 
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '取消';
-    cancelBtn.style.flex = '1';
-    cancelBtn.onclick = () => modal.close();
-
-    buttonContainer.appendChild(confirmBtn);
-    buttonContainer.appendChild(deleteBtn);
-    buttonContainer.appendChild(cancelBtn);
-    content.appendChild(buttonContainer);
-
-    modal.contentEl.appendChild(content);
     modal.open();
   }
 
   showAddCurrencyModal() {
     const modal = new Modal(this.app);
-    modal.titleEl.setText('➕ 添加新货币');
-
-    const content = document.createElement('div');
-    content.style.padding = '20px';
+    modal.titleEl.setText(this.t('settings.addCurrencyTitle'));
+    const content = this.createModalContent(modal, 'unset');
 
     content.innerHTML = `
-      <div style="margin-bottom: 5px;">名称：</div>
-      <input type="text" id="currency-name" placeholder="例如：金币" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">图标：</div>
-      <input type="text" id="currency-icon" placeholder="例如：🪙" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">描述：</div>
-      <input type="text" id="currency-desc" placeholder="货币用途说明" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">获取间隔（每多少积分获得）：</div>
-      <input type="number" id="currency-rate" placeholder="1000" style="width: 100%; margin-bottom: 15px;">
-      <div style="margin-bottom: 5px;">颜色：</div>
-      <input type="text" id="currency-color" placeholder="#00ff00" style="width: 100%; margin-bottom: 20px;">
-      <div style="color: #666; font-size: 12px; margin-bottom: 15px;">💡 新货币会自动加入系统，打卡时根据积分自动获取</div>
+      <div style="margin-bottom: 5px;">${this.t('common.name')}</div>
+      <input type="text" id="currency-name" placeholder="${this.t('settings.currencyNamePlaceholder')}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('common.icon')}</div>
+      <input type="text" id="currency-icon" placeholder="${this.t('settings.currencyIconPlaceholder')}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.currencyDescription')}</div>
+      <input type="text" id="currency-desc" placeholder="${this.t('settings.currencyDescPlaceholder')}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.currencyRate')}</div>
+      <input type="number" id="currency-rate" placeholder="${this.t('settings.currencyRatePlaceholder')}" style="width: 100%; margin-bottom: 15px;">
+      <div style="margin-bottom: 5px;">${this.t('settings.currencyColor')}</div>
+      <input type="text" id="currency-color" placeholder="${this.t('settings.currencyColorPlaceholder')}" style="width: 100%; margin-bottom: 20px;">
+      <div style="color: #666; font-size: 12px; margin-bottom: 15px;">${this.t('settings.currencyHint')}</div>
     `;
 
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
+    const buttonRow = this.createButtonRow();
+    buttonRow.appendChild(this.createActionButton(this.t('common.add'), async () => {
+      const name = content.querySelector('#currency-name').value.trim();
+      if (!name) {
+        new Notice(this.t('settings.enterCurrencyName'));
+        return;
+      }
 
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = '✅ 添加';
-    confirmBtn.className = 'mod-cta';
-    confirmBtn.style.flex = '1';
-    confirmBtn.onclick = async () => {
-      const name = document.getElementById('currency-name').value.trim();
-      if (!name) { new Notice('❌ 请输入货币名称'); return; }
       const result = await this.plugin.dataStore.addCurrency(
         name,
-        document.getElementById('currency-icon').value.trim() || '💎',
-        document.getElementById('currency-desc').value.trim(),
-        parseInt(document.getElementById('currency-rate').value) || 1000,
-        document.getElementById('currency-color').value.trim() || '#00ff00'
+        content.querySelector('#currency-icon').value.trim() || '🪙',
+        content.querySelector('#currency-desc').value.trim(),
+        parseInt(content.querySelector('#currency-rate').value, 10) || 1000,
+        content.querySelector('#currency-color').value.trim() || '#00ff00'
       );
       new Notice(result.message);
-      if (result.success) modal.close();
-    };
+      if (result.success) {
+        modal.close();
+      }
+    }, 'mod-cta', 'flex: 1;'));
+    buttonRow.appendChild(this.createActionButton(this.t('common.cancel'), () => modal.close(), '', 'flex: 1;'));
+    content.appendChild(buttonRow);
 
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '取消';
-    cancelBtn.style.flex = '1';
-    cancelBtn.onclick = () => modal.close();
-
-    buttonContainer.appendChild(confirmBtn);
-    buttonContainer.appendChild(cancelBtn);
-    content.appendChild(buttonContainer);
-
-    modal.contentEl.appendChild(content);
     modal.open();
   }
 
   exportShopConfig() {
     const items = this.plugin.dataStore.getShopItems();
-    if (items.length === 0) {
-      new Notice('📭 暂无商品可导出');
+    if (!items.length) {
+      new Notice(this.t('settings.noShopToExport'));
       return;
     }
 
-    const exportData = {
+    const exportData = JSON.stringify({
       exportVersion: '1.0',
       exportedAt: new Date().toISOString(),
-      items: items
-    };
+      items
+    }, null, 2);
 
-    const data = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'shop-config-' + new Date().toISOString().split('T')[0] + '.json';
-    a.click();
-    URL.revokeObjectURL(url);
-    new Notice('✅ 商品配置已导出！');
+    const filename = `shop-config-${new Date().toISOString().split('T')[0]}.json`;
+    this.downloadJson(filename, exportData);
+    new Notice(this.t('settings.shopExported'));
   }
 
   importShopConfig() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          try {
-            const data = JSON.parse(e.target.result);
-            const items = data.items || data.customItems;
-            if (!items || !Array.isArray(items)) {
-              new Notice('❌ 无效的商品配置文件');
-              return;
-            }
+    input.onchange = async event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
 
-            if (!this.plugin.dataStore.shopConfig) {
-              this.plugin.dataStore.shopConfig = { items: this.plugin.dataStore.getDefaultShopItems() };
-            }
-            if (!this.plugin.dataStore.shopConfig.items) {
-              this.plugin.dataStore.shopConfig.items = this.plugin.dataStore.getDefaultShopItems();
-            }
-
-            let importCount = 0;
-            for (const item of items) {
-              if (item.name && item.category) {
-                const newItem = {
-                  ...item,
-                  id: 'imported-' + Date.now().toString() + '-' + importCount
-                };
-                this.plugin.dataStore.shopConfig.items.push(newItem);
-                importCount++;
-              }
-            }
-
-            await this.plugin.dataStore.saveShopConfig();
-            new Notice(`✅ 成功导入 ${importCount} 个商品！`);
-          } catch (err) {
-            new Notice('❌ 导入失败：' + err.message);
+      const reader = new FileReader();
+      reader.onload = async loadEvent => {
+        try {
+          const data = JSON.parse(loadEvent.target.result);
+          const items = data.items || data.customItems;
+          if (!items || !Array.isArray(items)) {
+            new Notice(this.t('settings.invalidShopConfig'));
+            return;
           }
-        };
-        reader.readAsText(file);
-      }
+
+          if (!this.plugin.dataStore.shopConfig) {
+            this.plugin.dataStore.shopConfig = { items: this.plugin.dataStore.getDefaultShopItems() };
+          }
+          if (!this.plugin.dataStore.shopConfig.items) {
+            this.plugin.dataStore.shopConfig.items = this.plugin.dataStore.getDefaultShopItems();
+          }
+
+          let importCount = 0;
+          for (const item of items) {
+            if (item.name && item.category) {
+              this.plugin.dataStore.shopConfig.items.push({
+                ...item,
+                id: `imported-${Date.now()}-${importCount}`
+              });
+              importCount += 1;
+            }
+          }
+
+          await this.plugin.dataStore.saveShopConfig();
+          new Notice(this.t('settings.shopImportSuccess', { count: importCount }));
+        } catch (error) {
+          new Notice(this.t('settings.importFailed', { message: error.message }));
+        }
+      };
+      reader.readAsText(file);
     };
     input.click();
   }
 
-  async updateDailyTemplate() {
-    if (!this.plugin.dataStore.config) {
-      this.plugin.dataStore.config = this.plugin.dataStore.getDefaultConfig();
-      await this.plugin.dataStore.saveConfig();
-    }
-    const config = this.plugin.dataStore.config;
+  showCreateTemplateConfirm(templatePath) {
+    const modal = new Modal(this.app);
+    modal.titleEl.setText(this.t('template.createTitle'));
+    const content = this.createModalContent(modal, 'unset');
+
+    content.innerHTML = `
+      <div style="margin-bottom: 16px; line-height: 1.6;">
+        ${this.t('template.createMissing')}
+        <div style="margin-top: 8px; padding: 10px; background: var(--background-secondary); border-radius: 6px; word-break: break-all;">
+          ${templatePath}
+        </div>
+      </div>
+      <div style="color: var(--text-muted); margin-bottom: 16px;">
+        ${this.t('template.createPrompt')}
+      </div>
+    `;
+
+    const buttonRow = this.createButtonRow();
+    buttonRow.appendChild(this.createActionButton(this.t('template.createNow'), async () => {
+      modal.close();
+      await this.updateDailyTemplate(templatePath);
+    }, 'mod-cta', 'flex: 1;'));
+    buttonRow.appendChild(this.createActionButton(this.t('template.createLater'), () => {
+      modal.close();
+      new Notice(this.t('template.savedPath', { path: templatePath }));
+    }, '', 'flex: 1;'));
+    content.appendChild(buttonRow);
+
+    modal.open();
+  }
+
+  async updateDailyTemplate(templatePathOverride) {
+    const config = this.ensureConfig();
+    await this.plugin.dataStore.saveConfig();
+
     const dailyTasks = config.dailyTasks || {
       mainTasks: { count: 3, pointsPerTask: 100 },
-      habits: { items: [{ name: '早起', points: 50 }, { name: '运动', points: 50 }, { name: '阅读', points: 50 }] },
+      habits: { items: this.plugin.dataStore.getDefaultDailyTasksDefinition().habits.items },
       extraTasks: { count: 2, pointsPerTask: 50 },
       pomodoro: { count: 6, pointsPerPomodoro: 50 }
     };
@@ -1493,97 +1540,76 @@ class SupremePlayerSettingTab extends PluginSettingTab {
     const habits = dailyTasks.habits?.items || [];
     const extraTasks = dailyTasks.extraTasks || { count: 2, pointsPerTask: 50 };
     const pomodoro = dailyTasks.pomodoro || { count: 6, pointsPerPomodoro: 50 };
-
     let mainTasksSection = '';
-    for (let i = 1; i <= mainTasks.count; i++) {
-      mainTasksSection += `- [ ] 任务${i} - ${mainTasks.pointsPerTask}\n`;
+    for (let index = 1; index <= mainTasks.count; index += 1) {
+      mainTasksSection += `- [ ] ${this.t('template.taskLabel')} ${index} - ${mainTasks.pointsPerTask}\n`;
     }
 
     let habitsSection = '';
     for (const habit of habits) {
-      const habitPoints = habit.points || 10;
-      habitsSection += `- [ ] ${habit.name} - ${habitPoints}\n`;
+      const habitName = this.getLocalizedText(habit.name, '');
+      habitsSection += `- [ ] ${habitName} - ${habit.points || 10}\n`;
     }
 
     let extraTasksSection = '';
-    const extraCount = extraTasks.count || 2;
-    for (let i = 1; i <= extraCount; i++) {
-      extraTasksSection += `- [ ] 额外任务${String.fromCharCode(64 + i)} - ${extraTasks.pointsPerTask || 50}\n`;
+    for (let index = 1; index <= (extraTasks.count || 2); index += 1) {
+      extraTasksSection += `- [ ] ${this.t('template.extraTaskLabel')} ${index} - ${extraTasks.pointsPerTask || 50}\n`;
     }
 
     let pomodoroSection = '';
-    for (let i = 0; i < pomodoro.count; i++) {
-      pomodoroSection += `- [ ] 完成 ⏱️\n`;
+    for (let index = 0; index < pomodoro.count; index += 1) {
+      pomodoroSection += `- [ ] ${this.t('template.completePomodoro')}\n`;
     }
 
     const templateContent = `---
 date: {{date}}
-weather:
-mood:
+${this.t('template.weather')}:
+${this.t('template.mood')}:
 ---
 
-> **📅 自律记录** | 执行打卡命令自动更新下方数据
+> **${this.t('template.frontmatterNote')}** | ${this.t('template.frontmatterHint')}
 
 ---
 
-★ **今日三件事**（优先完成，上限${mainTasks.count * mainTasks.pointsPerTask}）
-
+## 📝 ${this.t('template.mainTasks')} (${this.t('template.maxOnly', { value: mainTasks.count * mainTasks.pointsPerTask })})
 ${mainTasksSection}
 ---
 
-● **习惯打卡**
-
+## ✅ ${this.t('template.habits')} (${this.t('template.maxOnly', { value: habits.reduce((sum, habit) => sum + (habit.points || 10), 0) })})
 ${habitsSection}
 ---
 
-● **额外任务**（完成最多${extraTasks.count}项，上限${extraTasks.count * extraTasks.pointsPerTask}）
-
+## 📌 ${this.t('template.extraTasks')} (${this.t('template.maxOnly', { value: (extraTasks.count || 2) * (extraTasks.pointsPerTask || 50) })})
 ${extraTasksSection}
 ---
 
-⏰ **专注番茄钟**（每个${pomodoro.pointsPerPomodoro}积分，最多${pomodoro.count * pomodoro.pointsPerPomodoro}）
-
+## 🍅 ${this.t('template.pomodoro')} (${this.t('template.eachMax', { each: pomodoro.pointsPerPomodoro || 50, max: (pomodoro.count || 6) * (pomodoro.pointsPerPomodoro || 50) })})
 ${pomodoroSection}
 ---
 
-
-
-> ⚠️ 完成任务后，按 \`Ctrl+P\` 执行 **「每日打卡」**
+> ${this.t('template.checkinCommandHint')}
 
 ---
 
-### 📊 打卡记录（自动生成）
+### 📒 ${this.t('template.checkinRecord')}
 
-<!-- 以下内容由插件自动填充，请勿手动修改 -->
-
-📊 今日积分：
-
-💰 当前积分：
-※愿星 \\*
-※稀有道具卡 \\*
-※传奇道具卡 \\*
-
-⛲**许愿池**
-
-当前愿望：
-
----
+<!-- supreme-player:start -->
+<!-- supreme-player:end -->
 
 - {{date}} -
 `;
 
-    const adapter = this.app.vault.adapter;
-    let templatePath = config.templatePath || this.plugin.dataStore.autoDetectTemplatePath();
+    let templatePath = templatePathOverride || config.templatePath || this.plugin.dataStore.autoDetectTemplatePath();
     if (!templatePath.endsWith('.md')) {
       templatePath += '.md';
     }
 
     try {
-      await adapter.write(templatePath, templateContent);
-      new Notice('✅ 每日记录模板已更新！');
-    } catch (e) {
-      console.error('[Template] Error:', e);
-      new Notice('❌ 更新模板失败：' + e.message);
+      await this.app.vault.adapter.write(templatePath, templateContent);
+      new Notice(this.t('template.updated'));
+    } catch (error) {
+      console.error('[Template] Error:', error);
+      new Notice(this.t('template.updateFailed', { message: error.message }));
     }
   }
 }

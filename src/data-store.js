@@ -1,4 +1,5 @@
-const { CONFIG_FILE, SHOP_CONFIG_FILE } = require('./utils');
+﻿const { CONFIG_FILE, SHOP_CONFIG_FILE } = require('./utils');
+const { createI18n } = require('./i18n');
 
 class DataStore {
   constructor(app) {
@@ -6,6 +7,15 @@ class DataStore {
     this.stats = null;
     this.shopConfig = null;
     this.config = null;
+    this.i18n = createI18n(app, () => this.config?.language || 'auto');
+    this.t = (key, variables) => this.i18n.t(key, variables);
+  }
+
+  getLocalDateString(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   getDailyNotesSettings() {
@@ -45,22 +55,296 @@ class DataStore {
     return `${folder}/supreme-player-data.json`;
   }
 
+  getDefaultCurrenciesDefinition() {
+    return [
+      {
+        id: 'wishStars',
+        name: this.makeBilingualFromKey('datastore.currency.wishStars.name'),
+        icon: '⭐',
+        description: this.makeBilingualFromKey('datastore.currency.wishStars.desc'),
+        earnRate: 100,
+        earnAmount: 1,
+        color: '#ffd700',
+        editable: true
+      },
+      {
+        id: 'rareItemCards',
+        name: this.makeBilingualFromKey('datastore.currency.rareItemCards.name'),
+        icon: '🎴',
+        description: this.makeBilingualFromKey('datastore.currency.rareItemCards.desc'),
+        earnRate: 500,
+        earnAmount: 1,
+        color: '#9966ff',
+        editable: true
+      },
+      {
+        id: 'legendaryItemCards',
+        name: this.makeBilingualFromKey('datastore.currency.legendaryItemCards.name'),
+        icon: '🌠',
+        description: this.makeBilingualFromKey('datastore.currency.legendaryItemCards.desc'),
+        earnRate: 2000,
+        earnAmount: 1,
+        color: '#ffaa00',
+        editable: true
+      }
+    ];
+  }
+
+  getTranslation(language, key, variables) {
+    return this.i18n.translate(language, key, variables);
+  }
+
+  makeBilingualValue(zh, en) {
+    return {
+      lang: {
+        zh,
+        en
+      }
+    };
+  }
+
+  makeBilingualFromKey(key) {
+    return this.makeBilingualValue(
+      this.getTranslation('zh', key),
+      this.getTranslation('en', key)
+    );
+  }
+
+  isBilingualValue(value) {
+    return Boolean(
+      value
+      && typeof value === 'object'
+      && !Array.isArray(value)
+      && value.lang
+      && typeof value.lang === 'object'
+    );
+  }
+
+  getLocalizedText(value, fallback = '') {
+    if (this.isBilingualValue(value)) {
+      const language = this.i18n.getLanguage();
+      return value.lang[language] || value.lang.zh || value.lang.en || fallback;
+    }
+    return value ?? fallback;
+  }
+
+  updateLocalizedValue(existingValue, nextValue) {
+    if (this.isBilingualValue(existingValue)) {
+      const language = this.i18n.getLanguage();
+      return {
+        ...existingValue,
+        lang: {
+          ...existingValue.lang,
+          [language]: nextValue
+        }
+      };
+    }
+    return nextValue;
+  }
+
+  getBuiltinLevelDefinitions() {
+    return [
+      { minLevel: 0, maxLevel: 5, color: '#9966ff', abilityIcon: '✨', phaseIcon: '🪄' },
+      { minLevel: 6, maxLevel: 10, color: '#00aaff', abilityIcon: '🔮', phaseIcon: '🫧' },
+      { minLevel: 11, maxLevel: 15, color: '#00ffaa', abilityIcon: '🛠️', phaseIcon: '👑' },
+      { minLevel: 16, maxLevel: 20, color: '#ffaa00', abilityIcon: '🌍', phaseIcon: '🧿' },
+      { minLevel: 21, maxLevel: 25, color: '#ff6666', abilityIcon: '🌌', phaseIcon: '👾' },
+      { minLevel: 26, maxLevel: 999, color: '#ffd700', abilityIcon: '♾️', phaseIcon: 'ↂ' }
+    ];
+  }
+
+  getLocalizedBuiltinLevel(index) {
+    const base = this.getBuiltinLevelDefinitions()[index];
+    if (!base) return null;
+    return {
+      ...base,
+      title: this.makeBilingualFromKey(`datastore.level.${index}.title`),
+      ability: this.makeBilingualFromKey(`datastore.level.${index}.ability`),
+      phase: this.makeBilingualFromKey(`datastore.level.${index}.phase`)
+    };
+  }
+
+  getBuiltinShopDefinitions() {
+    return [
+      { id: 'wish-star-boost', category: 'system', type: 'consumable', rarity: 'rare', price: 1, icon: '⭐', effect: { type: 'add_wish_stars', value: 5 }, editable: false },
+      { id: 'level-skip', category: 'system', type: 'consumable', rarity: 'legendary', price: 5, icon: '⏫', effect: { type: 'add_points', value: 5000 }, editable: false },
+      { id: 'warmup-card', category: 'system', type: 'consumable', rarity: 'rare', price: 10, icon: '🔥', effect: { type: 'checkin_warmup', value: 1 }, editable: false },
+      { id: 'mystery-box', category: 'system', type: 'consumable', rarity: 'rare', price: 1, icon: '🎁', effect: { type: 'random_wish_stars', min: 1, max: 10 }, editable: true }
+    ];
+  }
+
+  getLocalizedBuiltinShopItem(id) {
+    const base = this.getBuiltinShopDefinitions().find(item => item.id === id);
+    if (!base) return null;
+    return {
+      ...base,
+      name: this.makeBilingualFromKey(`datastore.shop.${id}.name`),
+      description: this.makeBilingualFromKey(`datastore.shop.${id}.desc`)
+    };
+  }
+
+  getLocalizedPerfectRewardDefaults() {
+    return {
+      name: this.makeBilingualFromKey('datastore.reward.superDiamond.name'),
+      description: this.makeBilingualFromKey('datastore.reward.superDiamond.desc'),
+      blessingTitle: this.makeBilingualFromKey('datastore.reward.defaultBlessingTitle'),
+      blessingMessage: this.makeBilingualFromKey('datastore.reward.defaultBlessingMessage')
+    };
+  }
+
+  getLocalizedCurrency(currency) {
+    const keysById = {
+      wishStars: ['datastore.currency.wishStars.name', 'datastore.currency.wishStars.desc'],
+      rareItemCards: ['datastore.currency.rareItemCards.name', 'datastore.currency.rareItemCards.desc'],
+      legendaryItemCards: ['datastore.currency.legendaryItemCards.name', 'datastore.currency.legendaryItemCards.desc']
+    };
+
+    const keys = keysById[currency.id];
+    if (!keys) return currency;
+
+    const [nameKey, descKey] = keys;
+    const englishName = this.getTranslation('en', nameKey);
+    const englishDesc = this.getTranslation('en', descKey);
+    const localizedName = this.t(nameKey);
+    const localizedDesc = this.t(descKey);
+
+    const resolvedName = this.getLocalizedText(currency.name);
+    const resolvedDescription = this.getLocalizedText(currency.description);
+    return {
+      ...currency,
+      name: this.isBilingualValue(currency.name) || !currency.name || currency.name === englishName || currency.name === localizedName ? (resolvedName || localizedName) : currency.name,
+      description: this.isBilingualValue(currency.description) || !currency.description || currency.description === englishDesc || currency.description === localizedDesc ? (resolvedDescription || localizedDesc) : currency.description
+    };
+  }
+
+  getLocalizedLevelConfig(levelConfig, index) {
+    const localized = this.getLocalizedBuiltinLevel(index);
+    if (!localized) return levelConfig;
+
+    const englishTitle = this.getTranslation('en', `datastore.level.${index}.title`);
+    const englishAbility = this.getTranslation('en', `datastore.level.${index}.ability`);
+    const englishPhase = this.getTranslation('en', `datastore.level.${index}.phase`);
+    const localizedTitle = this.getLocalizedText(localized.title);
+    const localizedAbility = this.getLocalizedText(localized.ability);
+    const localizedPhase = this.getLocalizedText(localized.phase);
+    const currentTitle = this.getLocalizedText(levelConfig.title, levelConfig.title);
+    const currentAbility = this.getLocalizedText(levelConfig.ability, levelConfig.ability);
+    const currentPhase = this.getLocalizedText(levelConfig.phase, levelConfig.phase);
+
+    const sameRange = levelConfig.minLevel === localized.minLevel && levelConfig.maxLevel === localized.maxLevel;
+    const canTranslate = sameRange
+      && [englishTitle, localizedTitle].includes(currentTitle)
+      && [englishAbility, localizedAbility].includes(currentAbility)
+      && [englishPhase, localizedPhase].includes(currentPhase);
+
+    if (!canTranslate) {
+      return {
+        ...levelConfig,
+        title: this.getLocalizedText(levelConfig.title, ''),
+        ability: this.getLocalizedText(levelConfig.ability, ''),
+        phase: this.getLocalizedText(levelConfig.phase, '')
+      };
+    }
+
+    return {
+      ...levelConfig,
+      title: localizedTitle,
+      ability: localizedAbility,
+      phase: localizedPhase
+    };
+  }
+
+  getLocalizedShopItem(item) {
+    const localized = this.getLocalizedBuiltinShopItem(item.id);
+    if (!localized) {
+      return {
+        ...item,
+        name: this.getLocalizedText(item.name, item.name),
+        description: this.getLocalizedText(item.description, item.description)
+      };
+    }
+
+    const englishName = this.getTranslation('en', `datastore.shop.${item.id}.name`);
+    const englishDesc = this.getTranslation('en', `datastore.shop.${item.id}.desc`);
+    const localizedName = this.getLocalizedText(localized.name);
+    const localizedDesc = this.getLocalizedText(localized.description);
+    const currentName = this.getLocalizedText(item.name, item.name);
+    const currentDesc = this.getLocalizedText(item.description, item.description);
+
+    return {
+      ...item,
+      name: this.isBilingualValue(item.name) || !item.name || currentName === englishName || currentName === localizedName ? localizedName : item.name,
+      description: this.isBilingualValue(item.description) || !item.description || currentDesc === englishDesc || currentDesc === localizedDesc ? localizedDesc : item.description
+    };
+  }
+
+  getLocalizedPerfectReward(reward) {
+    if (!reward) return reward;
+    return {
+      ...reward,
+      blessingTitle: this.getLocalizedText(reward.blessingTitle, ''),
+      blessingMessage: this.getLocalizedText(reward.blessingMessage, ''),
+      exclusiveItem: reward.exclusiveItem
+        ? {
+            ...reward.exclusiveItem,
+            name: this.getLocalizedText(reward.exclusiveItem.name, ''),
+            description: this.getLocalizedText(reward.exclusiveItem.description, '')
+          }
+        : reward.exclusiveItem
+    };
+  }
+
+  getDefaultLevelsDefinition() {
+    return this.getBuiltinLevelDefinitions().map((level, index) => ({
+      ...level,
+      title: this.makeBilingualFromKey(`datastore.level.${index}.title`),
+      ability: this.makeBilingualFromKey(`datastore.level.${index}.ability`),
+      phase: this.makeBilingualFromKey(`datastore.level.${index}.phase`)
+    }));
+  }
+
+  getDefaultDailyTasksDefinition() {
+    return {
+      mainTasks: { count: 3, pointsPerTask: 100 },
+      habits: {
+        items: [
+          { name: this.t('datastore.habit.wakeUp'), points: 50 },
+          { name: this.t('datastore.habit.exercise'), points: 50 },
+          { name: this.t('datastore.habit.read'), points: 50 }
+        ]
+      },
+      extraTasks: { count: 2, pointsPerTask: 50 },
+      pomodoro: { count: 6, pointsPerPomodoro: 50 }
+    };
+  }
+
   async loadConfig() {
     try {
       const adapter = this.app.vault.adapter;
       if (await adapter.exists(CONFIG_FILE)) {
         const content = await adapter.read(CONFIG_FILE);
         const config = JSON.parse(content);
-        
+        let changed = false;
+
         if (!config.currencies) {
-          config.currencies = [
-            { id: 'wishStars', name: '愿星', icon: '⭐', description: '用于许愿和扰动世界线', earnRate: 100, earnAmount: 1, color: '#ffd700', editable: true },
-            { id: 'rareItemCards', name: '稀有道具卡', icon: '🎴', description: '用于购买稀有品质商品', earnRate: 500, earnAmount: 1, color: '#9966ff', editable: true },
-            { id: 'legendaryItemCards', name: '传奇道具卡', icon: '🌠', description: '用于购买传奇品质商品', earnRate: 2000, earnAmount: 1, color: '#ffaa00', editable: true }
-          ];
+          config.currencies = this.getDefaultCurrenciesDefinition();
+          changed = true;
+        }
+
+        if (!config.language) {
+          config.language = 'auto';
+          changed = true;
+        }
+
+        if (!config.perfectCheckInReward) {
+          config.perfectCheckInReward = this.getDefaultConfig().perfectCheckInReward;
+          changed = true;
+        }
+
+        if (changed) {
           await adapter.write(CONFIG_FILE, JSON.stringify(config, null, 2));
         }
-        
+
         return config;
       }
     } catch (e) {
@@ -76,46 +360,28 @@ class DataStore {
     const detectedDataPath = this.autoDetectDataPath();
     const detectedTemplatePath = this.autoDetectTemplatePath();
     return {
+      language: 'auto',
+      debugMode: false,
       dataFilePath: detectedDataPath,
       templatePath: detectedTemplatePath,
-      levels: [
-        { minLevel: 0, maxLevel: 5, title: '星语者', ability: '扭曲现实', phase: '术士', color: '#9966ff', abilityIcon: '🌟', phaseIcon: '🪄' },
-        { minLevel: 6, maxLevel: 10, title: '织梦师', ability: '覆写真实', phase: '人神', color: '#00aaff', abilityIcon: '🔮', phaseIcon: '🫧' },
-        { minLevel: 11, maxLevel: 15, title: '创造主', ability: '造物创生', phase: '伪神', color: '#00ffaa', abilityIcon: '⚛️', phaseIcon: '👑' },
-        { minLevel: 16, maxLevel: 20, title: '掌界者', ability: '掌控世界', phase: '真神', color: '#ffaa00', abilityIcon: '🌏', phaseIcon: '🧿' },
-        { minLevel: 21, maxLevel: 25, title: '元星神', ability: '指尖寰宇', phase: '星神', color: '#ff6666', abilityIcon: '🌌', phaseIcon: '👾' },
-        { minLevel: 26, maxLevel: 999, title: '无极尊', ability: '无穷界限', phase: '■■■■', color: '#ffd700', abilityIcon: '♾️', phaseIcon: 'ↂ' }
-      ],
-      currencies: [
-        { id: 'wishStars', name: '愿星', icon: '⭐', description: '用于许愿和扰动世界线', earnRate: 100, earnAmount: 1, color: '#ffd700', editable: true },
-        { id: 'rareItemCards', name: '稀有道具卡', icon: '🎴', description: '用于购买稀有品质商品', earnRate: 500, earnAmount: 1, color: '#9966ff', editable: true },
-        { id: 'legendaryItemCards', name: '传奇道具卡', icon: '🌠', description: '用于购买传奇品质商品', earnRate: 2000, earnAmount: 1, color: '#ffaa00', editable: true }
-      ],
+      levels: this.getDefaultLevelsDefinition(),
+      currencies: this.getDefaultCurrenciesDefinition(),
       customCurrencies: [],
-      dailyTasks: {
-        mainTasks: { count: 3, pointsPerTask: 100 },
-        habits: { items: [
-          { name: '早起', points: 50 },
-          { name: '运动', points: 50 },
-          { name: '阅读', points: 50 }
-        ]},
-        extraTasks: { count: 2, pointsPerTask: 50 },
-        pomodoro: { count: 6, pointsPerPomodoro: 50 }
-      },
+      dailyTasks: this.getDefaultDailyTasksDefinition(),
       perfectCheckInReward: {
         enabled: true,
         rewardType: 'exclusive',
         shopItemId: null,
         exclusiveItem: {
-          name: '超级大钻石',
+          name: this.makeBilingualFromKey('datastore.reward.superDiamond.name'),
           icon: '💎',
-          description: '完美打卡奖励，使用后随机获得愿星和超好运Buff',
+          description: this.makeBilingualFromKey('datastore.reward.superDiamond.desc'),
           rarity: 'legendary',
           category: 'system',
           effect: { type: 'super_diamond' }
         },
-        blessingTitle: '太棒了！今日任务全部完成！',
-        blessingMessage: '每一次完美打卡，都是对自己最好的投资！'
+        blessingTitle: this.makeBilingualFromKey('datastore.reward.defaultBlessingTitle'),
+        blessingMessage: this.makeBilingualFromKey('datastore.reward.defaultBlessingMessage')
       }
     };
   }
@@ -127,15 +393,11 @@ class DataStore {
   }
 
   getCurrencies() {
-    const defaultCurrencies = [
-      { id: 'wishStars', name: '愿星', icon: '⭐', description: '用于许愿和扰动世界线', earnRate: 100, earnAmount: 1, color: '#ffd700', editable: true },
-      { id: 'rareItemCards', name: '稀有道具卡', icon: '🎴', description: '用于购买稀有品质商品', earnRate: 500, earnAmount: 1, color: '#9966ff', editable: true },
-      { id: 'legendaryItemCards', name: '传奇道具卡', icon: '🌠', description: '用于购买传奇品质商品', earnRate: 2000, earnAmount: 1, color: '#ffaa00', editable: true }
-    ];
-    
+    const defaultCurrencies = this.getDefaultCurrenciesDefinition();
+
     if (!this.config) return defaultCurrencies;
     const currencies = this.config.currencies || defaultCurrencies;
-    return [...currencies, ...(this.config.customCurrencies || [])];
+    return [...currencies.map(currency => this.getLocalizedCurrency(currency)), ...(this.config.customCurrencies || [])];
   }
 
   async searchDataFile() {
@@ -201,7 +463,10 @@ class DataStore {
     if (!this.stats.wishes) this.stats.wishes = [];
     if (!this.stats.inventory) this.stats.inventory = [];
     if (!this.stats.usedExternalItems) this.stats.usedExternalItems = [];
-    if (this.stats.playerName === undefined) this.stats.playerName = '玩家';
+    if (!this.stats.checkInHistory) this.stats.checkInHistory = [];
+    if (this.stats.checkInWarmupStacks === undefined) this.stats.checkInWarmupStacks = 0;
+    if (this.stats.checkInWarmupAnchorDate === undefined) this.stats.checkInWarmupAnchorDate = null;
+    if (this.stats.playerName === undefined) this.stats.playerName = this.t('settings.defaultPlayerName');
     if (this.stats.todayPoints === undefined) this.stats.todayPoints = 0;
 
     const currencies = this.getCurrencies();
@@ -218,9 +483,17 @@ class DataStore {
       if (await adapter.exists(SHOP_CONFIG_FILE)) {
         const content = await adapter.read(SHOP_CONFIG_FILE);
         const config = JSON.parse(content);
+        const builtinItems = this.getDefaultShopItems();
         if (!config.items || config.items.length === 0) {
-          config.items = this.getDefaultShopItems();
-          await this.saveShopConfig();
+          config.items = builtinItems;
+          await adapter.write(SHOP_CONFIG_FILE, JSON.stringify(config, null, 2));
+        } else {
+          const existingIds = new Set(config.items.map(item => item.id));
+          const missingBuiltinItems = builtinItems.filter(item => !existingIds.has(item.id));
+          if (missingBuiltinItems.length) {
+            config.items.push(...missingBuiltinItems);
+            await adapter.write(SHOP_CONFIG_FILE, JSON.stringify(config, null, 2));
+          }
         }
         return config;
       } else {
@@ -244,7 +517,7 @@ class DataStore {
 
   getDefaultStats() {
     const stats = {
-      playerName: '玩家',
+      playerName: this.t('settings.defaultPlayerName'),
       totalPoints: 0,
       currentPoints: 0,
       level: 0,
@@ -254,6 +527,9 @@ class DataStore {
       legendaryItemCards: 0,
       lastUpdated: new Date().toISOString(),
       lastCheckInDate: null,
+      checkInHistory: [],
+      checkInWarmupStacks: 0,
+      checkInWarmupAnchorDate: null,
       wishes: [],
       inventory: [],
       usedExternalItems: [],
@@ -288,6 +564,7 @@ class DataStore {
       expiresAt: new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString()
     };
 
+    stats.buffs = stats.buffs.filter(existing => existing.id !== buffId);
     stats.buffs.push(buff);
     await this.save();
     return { success: true, buff: buff };
@@ -299,6 +576,167 @@ class DataStore {
 
     const now = new Date();
     return stats.buffs.filter(buff => new Date(buff.expiresAt) > now);
+  }
+
+  ensureCheckInHistory() {
+    const stats = this.getStats();
+    if (!stats.checkInHistory) {
+      stats.checkInHistory = [];
+    }
+    return stats.checkInHistory;
+  }
+
+  recordCheckInDate(dateString) {
+    const stats = this.getStats();
+    const history = this.ensureCheckInHistory();
+    if (!history.includes(dateString)) {
+      history.push(dateString);
+      history.sort();
+    }
+    stats.lastCheckInDate = dateString;
+  }
+
+  getCheckInStreak(referenceDate = new Date()) {
+    const history = new Set(this.ensureCheckInHistory());
+    let streak = 0;
+    const cursor = new Date(referenceDate);
+
+    while (true) {
+      const date = this.getLocalDateString(cursor);
+      if (!history.has(date)) {
+        break;
+      }
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+
+    return streak;
+  }
+
+  getYesterdayString(referenceDate = new Date()) {
+    const yesterday = new Date(referenceDate);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return this.getLocalDateString(yesterday);
+  }
+
+  isCheckInChainActive(referenceDate = new Date()) {
+    const stats = this.getStats();
+    const actualStreak = this.getCheckInStreak(referenceDate);
+    if (actualStreak > 0) {
+      return true;
+    }
+
+    const yesterday = this.getYesterdayString(referenceDate);
+    return stats.lastCheckInDate === yesterday;
+  }
+
+  normalizeCheckInWarmupState(referenceDate = new Date()) {
+    const stats = this.getStats();
+    if (!this.isCheckInChainActive(referenceDate)) {
+      stats.checkInWarmupStacks = 0;
+      stats.checkInWarmupAnchorDate = null;
+    }
+  }
+
+  getCheckInWarmupStacks(referenceDate = new Date()) {
+    this.normalizeCheckInWarmupState(referenceDate);
+    const stats = this.getStats();
+    return Math.max(0, Number(stats.checkInWarmupStacks || 0));
+  }
+
+  getEffectiveCheckInStreak(referenceDate = new Date()) {
+    const actualStreak = this.getCheckInStreak(referenceDate);
+    const warmupStacks = this.getCheckInWarmupStacks(referenceDate);
+    return {
+      actualStreak,
+      warmupStacks,
+      effectiveStreak: actualStreak + warmupStacks
+    };
+  }
+
+  getCheckInBonusMultiplier(streak) {
+    if (streak >= 7) return 1.5;
+    if (streak >= 3) return 1.2;
+    return 1;
+  }
+
+  getCurrentCheckInBuffInfo(referenceDate = new Date()) {
+    const stats = this.getStats();
+    this.normalizeCheckInWarmupState(referenceDate);
+    const { actualStreak, warmupStacks, effectiveStreak } = this.getEffectiveCheckInStreak(referenceDate);
+    const activeBuffs = this.getActiveBuffs();
+    const activeBuff = activeBuffs.find(buff => ['checkin-enhance', 'checkin-transcendent'].includes(buff.id)) || null;
+    const multiplier = this.getCheckInBonusMultiplier(effectiveStreak);
+    const nextTarget = effectiveStreak >= 7 ? null : (effectiveStreak >= 3 ? 7 : 3);
+    const remainingDays = nextTarget === null ? 0 : Math.max(0, nextTarget - effectiveStreak);
+
+    return {
+      actualStreak,
+      warmupStacks,
+      effectiveStreak,
+      multiplier,
+      bonusPercent: Math.round((multiplier - 1) * 100),
+      activeBuff,
+      nextTarget,
+      remainingDays,
+      isBuffActive: Boolean(activeBuff)
+    };
+  }
+
+  async refreshCheckInStreakBuff(streak) {
+    const stats = this.getStats();
+    if (!stats.buffs) stats.buffs = [];
+
+    stats.buffs = stats.buffs.filter(buff => !['checkin-enhance', 'checkin-transcendent'].includes(buff.id));
+
+    if (streak >= 7) {
+      await this.addBuff(
+        'checkin-transcendent',
+        this.t('inventory.buff.checkInTranscendentName'),
+        '🌠',
+        this.t('inventory.buff.checkInTranscendentDesc'),
+        24
+      );
+      return 'checkin-transcendent';
+    }
+
+    if (streak >= 3) {
+      await this.addBuff(
+        'checkin-enhance',
+        this.t('inventory.buff.checkInEnhanceName'),
+        '⚡',
+        this.t('inventory.buff.checkInEnhanceDesc'),
+        24
+      );
+      return 'checkin-enhance';
+    }
+
+    await this.save();
+    return null;
+  }
+
+  async addCheckInPoints(basePoints) {
+    this.normalizeCheckInWarmupState();
+    const today = this.getLocalDateString();
+    this.recordCheckInDate(today);
+
+    const { actualStreak, warmupStacks, effectiveStreak } = this.getEffectiveCheckInStreak();
+    const multiplier = this.getCheckInBonusMultiplier(effectiveStreak);
+    const awardedPoints = Math.round(basePoints * multiplier);
+
+    await this.refreshCheckInStreakBuff(effectiveStreak);
+    const result = await this.addPoints(awardedPoints);
+
+    return {
+      ...result,
+      basePoints,
+      awardedPoints,
+      streak: effectiveStreak,
+      actualStreak,
+      warmupStacks,
+      multiplier,
+      bonusPercent: Math.round((multiplier - 1) * 100)
+    };
   }
 
   async addPoints(points) {
@@ -314,7 +752,7 @@ class DataStore {
 
     if (newLevel > oldLevel) {
       stats.level = newLevel;
-      rewards.push('🎉 等级提升到 ' + newLevel + '!');
+      rewards.push(this.t('datastore.reward.levelUp', { level: newLevel }));
     }
 
     const currencies = this.getCurrencies();
@@ -323,7 +761,7 @@ class DataStore {
       const newAmount = Math.floor(stats.totalPoints / currency.earnRate);
       if (newAmount > oldAmount) {
         stats[currency.id] = (stats[currency.id] || 0) + (newAmount - oldAmount);
-        rewards.push(currency.icon + ' ' + currency.name + ' +' + (newAmount - oldAmount) + '!');
+        rewards.push(this.t('datastore.reward.currencyGain', { icon: currency.icon, name: currency.name, amount: newAmount - oldAmount }));
       }
     }
 
@@ -340,7 +778,7 @@ class DataStore {
 
     const wish = {
       id: Date.now().toString(),
-      name: name,
+      name,
       description: description || '',
       starCost: 0,
       progress: 0,
@@ -351,24 +789,24 @@ class DataStore {
 
     stats.wishes.push(wish);
     await this.save();
-    return { success: true, wish: wish, message: '✨ 愿望已创建！投入愿星来扰动世界线吧～' };
+    return { success: true, wish, message: this.t('wish.message.created') };
   }
 
   async boostWish(wishId, starCost) {
     const stats = this.getStats();
     if (stats.wishStars < starCost) {
-      return { success: false, message: '❌ 愿星不足！' };
+      return { success: false, message: this.t('wish.message.notEnoughStars') };
     }
 
     const wish = stats.wishes.find(w => w.id === wishId);
-    if (!wish) return { success: false, message: '❌ 愿望不存在！' };
-    if (wish.status !== 'active') return { success: false, message: '❌ 愿望已完成或已失败，无法强化' };
+    if (!wish) return { success: false, message: this.t('wish.message.notFound') };
+    if (wish.status !== 'active') return { success: false, message: this.t('wish.message.inactive') };
 
-    const hasLuckCharm = this.getActiveBuffs().some(b => b.id === 'luck-charm');
+    const hasLuckCharm = this.getActiveBuffs().some(buff => buff.id === 'luck-charm');
     let boostAmount = starCost * 10;
     if (hasLuckCharm) {
       boostAmount *= 2;
-      stats.buffs = stats.buffs.filter(b => b.id !== 'luck-charm');
+      stats.buffs = stats.buffs.filter(buff => buff.id !== 'luck-charm');
     }
 
     stats.wishStars -= starCost;
@@ -377,25 +815,24 @@ class DataStore {
 
     if (wish.progress >= 100) {
       const result = await this.completeWish(wishId);
-      return { success: true, wish: wish, message: result.message, completed: true, blessings: result.blessings, bonusPoints: result.bonusPoints };
+      return { success: true, wish, message: result.message, completed: true, blessings: result.blessings, bonusPoints: result.bonusPoints };
     }
 
     await this.save();
-    return { success: true, wish: wish, message: '🌌 世界线扰动！进度 +' + boostAmount + '%', completed: false };
+    return { success: true, wish, message: this.t('wish.message.progress', { amount: boostAmount }), completed: false };
   }
 
   async completeWish(wishId) {
     const stats = this.getStats();
     const wishIndex = stats.wishes.findIndex(w => w.id === wishId);
 
-    if (wishIndex === -1) return { success: false, message: '❌ 愿望不存在' };
+    if (wishIndex === -1) return { success: false, message: this.t('wish.message.notFound') };
 
     const wish = stats.wishes[wishIndex];
-    if (wish.progress < 100) return { success: false, message: '❌ 许愿池未填满' };
+    if (wish.progress < 100) return { success: false, message: this.t('wish.message.progressNotFull') };
 
     wish.status = 'completed';
     stats.completedWishes = (stats.completedWishes || 0) + 1;
-
     stats.totalPoints += 500;
     stats.currentPoints += 500;
 
@@ -409,29 +846,26 @@ class DataStore {
 
     if (!stats.completedWishRecords) stats.completedWishRecords = [];
     stats.completedWishRecords.push(completedRecord);
-
     stats.wishes.splice(wishIndex, 1);
 
-    await this.addBuff('luck-boost', '好运气', '🍀', '世界线已为你偏移，美好的事物正在靠近', 24);
+    await this.addBuff('luck-boost', this.t('inventory.buff.superLuckName'), '🍀', this.t('inventory.buff.superLuckDesc'), 24);
     await this.save();
-
-    const blessings = this.getRandomBlessings();
 
     return {
       success: true,
-      message: '🌟 许愿池已满！世界线成功扰动！',
+      message: this.t('wish.message.completed'),
       bonusPoints: 500,
-      blessings: blessings
+      blessings: this.getRandomBlessings()
     };
   }
 
   getRandomBlessings() {
     const blessings = [
-      '愿星光照亮你前行的道路。',
-      '世界线已为你偏移，美好的事物正在靠近。',
-      '命运的齿轮开始转动，期待奇迹的发生。',
-      '你的愿望已被世界听见，静待花开。',
-      '愿好运与你相伴，心想事成。'
+      this.t('wish.blessing.0'),
+      this.t('wish.blessing.1'),
+      this.t('wish.blessing.2'),
+      this.t('wish.blessing.3'),
+      this.t('wish.blessing.4')
     ];
     return blessings.sort(() => Math.random() - 0.5).slice(0, 3);
   }
@@ -441,115 +875,64 @@ class DataStore {
       return this.getFallbackLevelTitle(level);
     }
 
-    for (const levelConfig of this.config.levels) {
+    for (let index = 0; index < this.config.levels.length; index += 1) {
+      const levelConfig = this.getLocalizedLevelConfig(this.config.levels[index], index);
       if (level >= levelConfig.minLevel && level <= levelConfig.maxLevel) {
         return {
           title: levelConfig.title,
           ability: levelConfig.ability,
           phase: levelConfig.phase,
           color: levelConfig.color || '#ffffff',
-          abilityIcon: levelConfig.abilityIcon || '⚔️',
-          phaseIcon: levelConfig.phaseIcon || '👑'
+          abilityIcon: levelConfig.abilityIcon || '✨',
+          phaseIcon: levelConfig.phaseIcon || '🌟'
         };
       }
     }
 
-    const lastLevel = this.config.levels[this.config.levels.length - 1];
+    const lastIndex = this.config.levels.length - 1;
+    const lastLevel = this.getLocalizedLevelConfig(this.config.levels[lastIndex], lastIndex);
     return {
       title: lastLevel.title,
       ability: lastLevel.ability,
       phase: lastLevel.phase,
       color: lastLevel.color || '#ffffff',
-      abilityIcon: lastLevel.abilityIcon || '⚔️',
-      phaseIcon: lastLevel.phaseIcon || '👑'
+      abilityIcon: lastLevel.abilityIcon || '✨',
+      phaseIcon: lastLevel.phaseIcon || '🌟'
     };
   }
 
   getFallbackLevelTitle(level) {
-    const levels = [
-      { max: 5, title: '星语者', ability: '扭曲现实', phase: '术士', color: '#9966ff' },
-      { max: 10, title: '织梦师', ability: '覆写真实', phase: '人神', color: '#00aaff' },
-      { max: 15, title: '创造主', ability: '造物创生', phase: '伪神', color: '#00ffaa' },
-      { max: 20, title: '掌界者', ability: '掌控世界', phase: '真神', color: '#ffaa00' },
-      { max: 25, title: '元星神', ability: '指尖寰宇', phase: '星神', color: '#ff6666' },
-    ];
-    for (const l of levels) {
-      if (level <= l.max) return { ...l, abilityIcon: '⚔️', phaseIcon: '👑' };
+    const levels = this.getDefaultLevelsDefinition();
+    for (const entry of levels) {
+      if (level <= entry.maxLevel) return { ...entry, abilityIcon: entry.abilityIcon || '✨', phaseIcon: entry.phaseIcon || '🌟' };
     }
-    return { title: '无极尊', ability: '无穷界限', phase: '■■■■', color: '#ffd700', abilityIcon: '⚔️', phaseIcon: '👑' };
+    const finalLevel = levels[levels.length - 1];
+    return { ...finalLevel, abilityIcon: finalLevel.abilityIcon || '✨', phaseIcon: finalLevel.phaseIcon || '🌟' };
   }
 
   getShopItems() {
     if (!this.shopConfig) this.shopConfig = { items: this.getDefaultShopItems() };
     if (!this.shopConfig.items) this.shopConfig.items = this.getDefaultShopItems();
-    return this.shopConfig.items;
+    return this.shopConfig.items
+      .filter(item => item.id !== 'milk')
+      .map(item => this.getLocalizedShopItem(item));
   }
 
   getDefaultShopItems() {
-    return [
-      {
-        id: "wish-star-boost",
-        name: "愿星充能器",
-        description: "立即获得5颗愿星",
-        category: "system",
-        type: "consumable",
-        rarity: "rare",
-        price: 1,
-        icon: "✨",
-        effect: { type: "add_wish_stars", value: 5 },
-        editable: false
-      },
-      {
-        id: "level-skip",
-        name: "等级跃迁符",
-        description: "立即提升1级",
-        category: "system",
-        type: "consumable",
-        rarity: "legendary",
-        price: 1,
-        icon: "💫",
-        effect: { type: "add_level", value: 1 },
-        editable: false
-      },
-      {
-        id: "mystery-box",
-        name: "神秘福袋",
-        description: "随机获得1-10颗愿星",
-        category: "system",
-        type: "consumable",
-        rarity: "rare",
-        price: 1,
-        icon: "🎁",
-        effect: { type: "random_wish_stars", min: 1, max: 10 },
-        editable: true
-      },
-      {
-        id: "milk",
-        name: "牛奶",
-        description: "清除身上所有Buff效果",
-        category: "system",
-        type: "consumable",
-        rarity: "rare",
-        price: 1,
-        icon: "🥛",
-        effect: { type: "clear_all_buffs" },
-        editable: false
-      }
-    ];
+    return this.getBuiltinShopDefinitions().map(item => this.getLocalizedBuiltinShopItem(item.id));
   }
 
   async purchaseItem(itemId) {
     const stats = this.getStats();
     const items = this.getShopItems();
-    const item = items.find(i => i.id === itemId);
+    const item = items.find(entry => entry.id === itemId);
 
-    if (!item) return { success: false, message: '❌ 商品不存在！' };
-
+    if (!item) return { success: false, message: this.t('inventory.message.itemNotFound') };
     if (item.rarity === 'rare' && stats.rareItemCards < item.price) {
-      return { success: false, message: '❌ 稀有道具卡不足！' };
+      return { success: false, message: this.t('shop.message.notEnoughRareCards') };
     }
     if (item.rarity === 'legendary' && stats.legendaryItemCards < item.price) {
-      return { success: false, message: '❌ 传奇道具卡不足！' };
+      return { success: false, message: this.t('shop.message.notEnoughLegendaryCards') };
     }
 
     if (item.rarity === 'rare') {
@@ -573,14 +956,14 @@ class DataStore {
     stats.inventory.push(inventoryItem);
     await this.save();
 
-    return { success: true, message: '🎴 购买成功！商品已加入背包' };
+    return { success: true, message: this.t('inventory.message.purchaseSuccess') };
   }
 
   async useItem(instanceId) {
     const stats = this.getStats();
-    const itemIndex = stats.inventory.findIndex(i => i.instanceId === instanceId);
+    const itemIndex = stats.inventory.findIndex(item => item.instanceId === instanceId);
 
-    if (itemIndex === -1) return { success: false, message: '❌ 物品不存在！' };
+    if (itemIndex === -1) return { success: false, message: this.t('inventory.message.itemNotFound') };
 
     const item = stats.inventory[itemIndex];
 
@@ -592,74 +975,88 @@ class DataStore {
         switch (effect.type) {
           case 'add_wish_stars':
             stats.wishStars += effect.value || 1;
-            effectMessage = `获得 ${effect.value} 颗愿星`;
+            effectMessage = this.t('inventory.effect.addWishStars', { value: effect.value || 1 });
             break;
           case 'add_level':
             stats.level += effect.value || 1;
             stats.totalPoints = Math.max(stats.totalPoints, stats.level * 5000);
-            effectMessage = `等级提升 ${effect.value} 级`;
+            effectMessage = this.t('inventory.effect.addLevel', { value: effect.value || 1 });
             break;
           case 'add_points':
             stats.totalPoints += effect.value || 100;
             stats.currentPoints += effect.value || 100;
-            effectMessage = `获得 ${effect.value} 积分`;
+            stats.level = Math.floor(stats.totalPoints / 5000);
+            effectMessage = this.t('inventory.effect.addPoints', { value: effect.value || 100 });
             break;
           case 'random_wish_stars': {
             const min = effect.min || 1;
             const max = effect.max || 5;
             const amount = Math.floor(Math.random() * (max - min + 1)) + min;
             stats.wishStars += amount;
-            effectMessage = `随机获得 ${amount} 颗愿星`;
+            effectMessage = this.t('inventory.effect.randomWishStars', { value: amount });
+            break;
+          }
+          case 'checkin_warmup': {
+            this.normalizeCheckInWarmupState();
+            stats.checkInWarmupStacks = Math.max(0, Number(stats.checkInWarmupStacks || 0)) + (effect.value || 1);
+            stats.checkInWarmupAnchorDate = this.getLocalDateString();
+            const refreshedInfo = this.getCurrentCheckInBuffInfo();
+            if (this.isCheckInChainActive() && refreshedInfo.effectiveStreak >= 3) {
+              await this.refreshCheckInStreakBuff(refreshedInfo.effectiveStreak);
+            }
+            const info = this.getCurrentCheckInBuffInfo();
+            effectMessage = this.t('inventory.effect.checkInWarmup', {
+              value: effect.value || 1,
+              total: stats.checkInWarmupStacks,
+              target: info.nextTarget || 7,
+              remaining: info.remainingDays
+            });
             break;
           }
           case 'buff': {
             const buffId = 'custom-' + Date.now().toString();
             const duration = effect.duration || effect.buffDuration || 24;
             await this.addBuff(buffId, effect.buffName, effect.buffIcon || item.icon, effect.buffDesc || item.description, duration);
-            effectMessage = `获得Buff：${effect.buffName}`;
+            effectMessage = this.t('inventory.effect.buff', { name: effect.buffName });
             break;
           }
           case 'super_diamond': {
             const baseAmount = Math.floor(Math.random() * 5) + 1;
             let totalStars = baseAmount;
-            effectMessage = `获得 ${baseAmount} 颗愿星`;
-
-            if (Math.random() < 0.2) {
-              totalStars += 5;
-              effectMessage += ' + 额外5颗';
-            }
-            if (Math.random() < 0.01) {
-              totalStars += 100;
-              effectMessage += ' + 超级爆发100颗！';
-            }
-
+            if (Math.random() < 0.2) totalStars += 5;
+            if (Math.random() < 0.01) totalStars += 100;
             stats.wishStars += totalStars;
-            await this.addBuff('super-luck', '超好运', '🌟', '星光闪耀，好运降临！特殊祝福中...', 1);
-            effectMessage = `✨ 获得 ${totalStars} 颗愿星 + 超好运Buff！`;
+            await this.addBuff('super-luck', this.t('inventory.buff.superLuckName'), '💫', this.t('inventory.buff.superLuckDesc'), 1);
+            effectMessage = this.t('inventory.effect.superDiamond', { value: totalStars });
             break;
           }
-          case 'clear_all_buffs': {
+          case 'clear_all_buffs':
             stats.buffs = [];
-            effectMessage = '已清除所有Buff效果';
+            effectMessage = this.t('inventory.effect.clearAllBuffs');
             break;
-          }
         }
       }
 
       stats.inventory.splice(itemIndex, 1);
       await this.save();
+      return {
+        success: true,
+        message: effectMessage
+          ? this.t('inventory.message.usedSuccessWithEffect', { name: item.name, effect: effectMessage })
+          : this.t('inventory.message.usedSuccess', { name: item.name }),
+        external: false
+      };
+    }
 
-      return { success: true, message: `✅ 使用成功！${item.name} 已生效${effectMessage ? ' - ' + effectMessage : ''}`, external: false };
-    } else if (item.category === 'external') {
+    if (item.category === 'external') {
       stats.inventory.splice(itemIndex, 1);
       if (!stats.usedExternalItems) stats.usedExternalItems = [];
       stats.usedExternalItems.push({ ...item, usedAt: new Date().toISOString() });
       await this.save();
-
-      return { success: true, message: '✅ 已使用 ' + item.name + '！请记得兑现承诺哦～', external: true, item: item };
+      return { success: true, message: this.t('inventory.message.externalUsed', { name: item.name }), external: true, item };
     }
 
-    return { success: false, message: '❌ 使用失败' };
+    return { success: false, message: this.t('inventory.message.useFailed') };
   }
 
   async exportData() {
@@ -677,6 +1074,13 @@ class DataStore {
       const data = JSON.parse(jsonString);
       if (data.stats) {
         this.stats = data.stats;
+        if (Array.isArray(this.stats.inventory)) {
+          for (const item of this.stats.inventory) {
+            if (item?.category === 'exclusive') {
+              item.category = 'system';
+            }
+          }
+        }
         await this.save();
       }
       if (data.config) {
@@ -687,9 +1091,9 @@ class DataStore {
         this.shopConfig = data.shopConfig;
         await this.saveShopConfig();
       }
-      return { success: true, message: '✅ 数据导入成功！' };
+      return { success: true, message: this.t('datastore.message.importSuccess') };
     } catch (e) {
-      return { success: false, message: '❌ 数据导入失败：' + e.message };
+      return { success: false, message: this.t('datastore.message.importFailed', { message: e.message }) };
     }
   }
 
@@ -705,63 +1109,68 @@ class DataStore {
 
     const newItem = {
       id: 'item-' + Date.now().toString(),
-      name: name,
+      name,
       description: description || '',
       category: category || 'system',
       type: type || 'consumable',
       price: price || 1,
       rarity: rarity || 'rare',
-      icon: icon || '📦',
-      effect: effect
+      icon: icon || '🎁',
+      effect
     };
 
     this.shopConfig.items.push(newItem);
     await this.saveShopConfig();
-    return { success: true, message: '✅ 商品添加成功！', item: newItem };
+    return { success: true, message: this.t('datastore.message.itemAdded'), item: newItem };
   }
 
   async updateShopItem(itemId, updates) {
     if (!this.shopConfig?.items) {
-      return { success: false, message: '❌ 商品配置不存在' };
+      return { success: false, message: this.t('datastore.message.shopConfigMissing') };
     }
 
-    const item = this.shopConfig.items.find(i => i.id === itemId);
-    if (!item) return { success: false, message: '❌ 商品不存在' };
+    const item = this.shopConfig.items.find(entry => entry.id === itemId);
+    if (!item) return { success: false, message: this.t('inventory.message.itemNotFound') };
 
-    const fields = ['name', 'description', 'icon', 'price', 'rarity', 'category', 'effect'];
+    if (updates.name !== undefined) item.name = this.updateLocalizedValue(item.name, updates.name);
+    if (updates.description !== undefined) item.description = this.updateLocalizedValue(item.description, updates.description);
+    const fields = ['icon', 'price', 'rarity', 'category', 'effect'];
     for (const field of fields) {
       if (updates[field] !== undefined) item[field] = updates[field];
     }
 
     await this.saveShopConfig();
-    return { success: true, message: '✅ 商品更新成功！' };
+    return { success: true, message: this.t('datastore.message.itemUpdated') };
   }
 
   async deleteShopItem(itemId) {
     if (!this.shopConfig?.items) {
-      return { success: false, message: '❌ 商品配置不存在' };
+      return { success: false, message: this.t('datastore.message.shopConfigMissing') };
     }
 
-    const itemIndex = this.shopConfig.items.findIndex(i => i.id === itemId);
-    if (itemIndex === -1) return { success: false, message: '❌ 商品不存在' };
+    const itemIndex = this.shopConfig.items.findIndex(entry => entry.id === itemId);
+    if (itemIndex === -1) return { success: false, message: this.t('inventory.message.itemNotFound') };
 
     this.shopConfig.items.splice(itemIndex, 1);
     await this.saveShopConfig();
-    return { success: true, message: '✅ 商品已删除！' };
+    return { success: true, message: this.t('datastore.message.itemDeleted') };
   }
 
   async updateLevelConfig(index, updates) {
-    if (!this.config?.levels) return { success: false, message: '❌ 等级配置不存在' };
-    if (!this.config.levels[index]) return { success: false, message: '❌ 等级不存在' };
+    if (!this.config?.levels) return { success: false, message: this.t('datastore.message.levelConfigMissing') };
+    if (!this.config.levels[index]) return { success: false, message: this.t('datastore.message.levelNotFound') };
 
     const level = this.config.levels[index];
-    const fields = ['title', 'ability', 'abilityIcon', 'phase', 'phaseIcon', 'color', 'minLevel', 'maxLevel'];
+    if (updates.title !== undefined) level.title = this.updateLocalizedValue(level.title, updates.title);
+    if (updates.ability !== undefined) level.ability = this.updateLocalizedValue(level.ability, updates.ability);
+    if (updates.phase !== undefined) level.phase = this.updateLocalizedValue(level.phase, updates.phase);
+    const fields = ['abilityIcon', 'phaseIcon', 'color', 'minLevel', 'maxLevel'];
     for (const field of fields) {
       if (updates[field] !== undefined) level[field] = updates[field];
     }
 
     await this.saveConfig();
-    return { success: true, message: '✅ 等级更新成功！' };
+    return { success: true, message: this.t('datastore.message.levelUpdated') };
   }
 
   async addLevelConfig(levelData) {
@@ -771,27 +1180,27 @@ class DataStore {
     const newLevel = {
       minLevel: levelData.minLevel || 0,
       maxLevel: levelData.maxLevel || 999,
-      title: levelData.title || '新等级',
-      ability: levelData.ability || '无',
-      abilityIcon: levelData.abilityIcon || '⚔️',
-      phase: levelData.phase || '凡人',
-      phaseIcon: levelData.phaseIcon || '👑',
+      title: levelData.title || 'New Level',
+      ability: levelData.ability || '',
+      abilityIcon: levelData.abilityIcon || '✨',
+      phase: levelData.phase || 'Mortal',
+      phaseIcon: levelData.phaseIcon || '🌟',
       color: levelData.color || '#ffffff'
     };
 
     this.config.levels.push(newLevel);
     this.config.levels.sort((a, b) => a.minLevel - b.minLevel);
     await this.saveConfig();
-    return { success: true, message: '✅ 等级添加成功！' };
+    return { success: true, message: this.t('datastore.message.levelAdded') };
   }
 
   async deleteLevelConfig(index) {
-    if (!this.config?.levels) return { success: false, message: '❌ 等级配置不存在' };
-    if (!this.config.levels[index]) return { success: false, message: '❌ 等级不存在' };
+    if (!this.config?.levels) return { success: false, message: this.t('datastore.message.levelConfigMissing') };
+    if (!this.config.levels[index]) return { success: false, message: this.t('datastore.message.levelNotFound') };
 
     this.config.levels.splice(index, 1);
     await this.saveConfig();
-    return { success: true, message: '✅ 等级已删除！' };
+    return { success: true, message: this.t('datastore.message.levelDeleted') };
   }
 
   async addCurrency(name, icon, description, earnRate, color) {
@@ -800,9 +1209,9 @@ class DataStore {
 
     const id = 'custom-' + name.toLowerCase().replace(/\s+/g, '-');
     const newCurrency = {
-      id: id,
-      name: name,
-      icon: icon || '💎',
+      id,
+      name,
+      icon: icon || '🪙',
       description: description || '',
       earnRate: earnRate || 1000,
       earnAmount: 1,
@@ -817,36 +1226,37 @@ class DataStore {
 
     await this.saveConfig();
     await this.save();
-    return { success: true, message: '✅ 货币添加成功！', currency: newCurrency };
+    return { success: true, message: this.t('datastore.message.currencyAdded'), currency: newCurrency };
   }
 
   async updateCurrency(currencyId, updates) {
-    if (!this.config) return { success: false, message: '❌ 配置不存在' };
+    if (!this.config) return { success: false, message: this.t('datastore.message.configMissing') };
 
-    let currency = this.config.customCurrencies?.find(c => c.id === currencyId);
-    if (!currency) currency = this.config.currencies?.find(c => c.id === currencyId);
-    if (!currency) return { success: false, message: '❌ 货币不存在' };
+    let currency = this.config.customCurrencies?.find(entry => entry.id === currencyId);
+    if (!currency) currency = this.config.currencies?.find(entry => entry.id === currencyId);
+    if (!currency) return { success: false, message: this.t('datastore.message.currencyNotFound') };
+    if (!currency.editable) return { success: false, message: this.t('datastore.message.systemCurrencyLocked') };
 
-    if (!currency.editable) return { success: false, message: '❌ 系统货币不可编辑' };
-
-    const fields = ['name', 'icon', 'description', 'earnRate', 'color'];
+    if (updates.name !== undefined) currency.name = this.updateLocalizedValue(currency.name, updates.name);
+    if (updates.description !== undefined) currency.description = this.updateLocalizedValue(currency.description, updates.description);
+    const fields = ['icon', 'earnRate', 'color'];
     for (const field of fields) {
       if (updates[field] !== undefined) currency[field] = updates[field];
     }
 
     await this.saveConfig();
-    return { success: true, message: '✅ 货币更新成功！' };
+    return { success: true, message: this.t('datastore.message.currencyUpdated') };
   }
 
   async deleteCurrency(currencyId) {
-    if (!this.config?.customCurrencies) return { success: false, message: '❌ 自定义货币不存在' };
+    if (!this.config?.customCurrencies) return { success: false, message: this.t('datastore.message.customCurrencyListMissing') };
 
-    const index = this.config.customCurrencies.findIndex(c => c.id === currencyId);
-    if (index === -1) return { success: false, message: '❌ 货币不存在' };
+    const index = this.config.customCurrencies.findIndex(entry => entry.id === currencyId);
+    if (index === -1) return { success: false, message: this.t('datastore.message.currencyNotFound') };
 
     this.config.customCurrencies.splice(index, 1);
     await this.saveConfig();
-    return { success: true, message: '✅ 货币已删除！' };
+    return { success: true, message: this.t('datastore.message.currencyDeleted') };
   }
 }
 

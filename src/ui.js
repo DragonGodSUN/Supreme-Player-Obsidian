@@ -707,9 +707,7 @@ const UI = {
 
   async showCheckInPanel(plugin) {
     const config = plugin.dataStore.config || plugin.dataStore.getDefaultConfig();
-    const stats = plugin.dataStore.getStats();
     const today = getTodayString();
-    const alreadyCheckedIn = stats.lastCheckInDate === today;
 
     const dailyTasks = config.dailyTasks || {
       mainTasks: { count: 3, pointsPerTask: 100 },
@@ -728,6 +726,27 @@ const UI = {
 
     const content = document.createElement("div");
     content.style.padding = "20px";
+
+    let currentPoints = 0;
+    let record = null;
+    let alreadyCheckedIn = false;
+
+    try {
+      const file = await Core.findTodayNoteFile(plugin.app);
+      if (file) {
+        const noteContent = await plugin.app.vault.read(file);
+        record = plugin.parser.parseDailyNote(noteContent, today);
+        currentPoints = plugin.parser.calculatePoints(record);
+        alreadyCheckedIn = /今日积分|Today points/.test(noteContent);
+      }
+    } catch (error) {
+      console.log("No daily note found", error);
+    }
+
+    if (!alreadyCheckedIn) {
+      const stats = plugin.dataStore.getStats();
+      alreadyCheckedIn = stats.lastCheckInDate === today;
+    }
 
     if (alreadyCheckedIn) {
       content.innerHTML = `
@@ -752,20 +771,6 @@ const UI = {
       modal.contentEl.appendChild(content);
       modal.open();
       return;
-    }
-
-    let currentPoints = 0;
-    let record = null;
-
-    try {
-      const file = await Core.findTodayNoteFile(plugin.app);
-      if (file) {
-        const noteContent = await plugin.app.vault.read(file);
-        record = plugin.parser.parseDailyNote(noteContent, today);
-        currentPoints = plugin.parser.calculatePoints(record);
-      }
-    } catch (error) {
-      console.log("No daily note found", error);
     }
 
     const progressPercent = Math.min(100, Math.round((currentPoints / maxBasePoints) * 100));

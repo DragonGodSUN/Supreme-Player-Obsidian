@@ -2362,31 +2362,90 @@ var require_daily_note_parser = __commonJS({
       constructor(dataStore) {
         this.dataStore = dataStore;
       }
+      getSectionKeywords(key) {
+        const zh = this.dataStore.getTranslation("zh", key);
+        const en = this.dataStore.getTranslation("en", key);
+        const current = this.dataStore.t(key);
+        const keywords = /* @__PURE__ */ new Set();
+        if (zh)
+          keywords.add(zh);
+        if (en)
+          keywords.add(en);
+        if (current)
+          keywords.add(current);
+        return [...keywords];
+      }
+      buildSectionRegex(keywords) {
+        const escaped = keywords.map((kw) => kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        const pattern = `^(?:${escaped.join("|")})$`;
+        return new RegExp(pattern, "i");
+      }
       parseDailyNote(content, date) {
         const record = { date, mainTasks: [], habits: [], extraTasks: [], pomodoros: [], totalPoints: 0 };
-        const mainTaskRegex = /(?:^|\n)##\s*(?:Main Tasks|主任务)(?:\s*\([^)]+\))?\s*\n([\s\S]*?)(?=\n##\s*(?:Habits|习惯|Extra Tasks|额外任务|Pomodoro|番茄钟)\b|\n---|\n###|$)/i;
-        const habitRegex = /(?:^|\n)##\s*(?:Habits|习惯)(?:\s*\([^)]+\))?\s*\n([\s\S]*?)(?=\n##\s*(?:Extra Tasks|额外任务|Pomodoro|番茄钟)\b|\n---|\n###|$)/i;
-        const extraTaskRegex = /(?:^|\n)##\s*(?:Extra Tasks|额外任务)(?:\s*\([^)]+\))?\s*\n([\s\S]*?)(?=\n##\s*(?:Pomodoro|番茄钟)\b|\n---|\n###|$)/i;
-        const pomodoroRegex = /(?:^|\n)##\s*(?:Pomodoro|番茄钟)(?:\s*\([^)]+\))?\s*\n([\s\S]*?)(?=\n---|\n###|$)/i;
-        const mainMatch = mainTaskRegex.exec(content);
-        if (mainMatch)
-          record.mainTasks = this.parseTaskLines(mainMatch[1]);
-        const habitMatch = habitRegex.exec(content);
-        if (habitMatch)
-          record.habits = this.parseTaskLines(habitMatch[1]);
-        const extraMatch = extraTaskRegex.exec(content);
-        if (extraMatch)
-          record.extraTasks = this.parseTaskLines(extraMatch[1]);
-        const pomodoroMatch = pomodoroRegex.exec(content);
-        if (pomodoroMatch)
-          record.pomodoros = this.parsePomodoros(pomodoroMatch[1]);
+        const sections = this.extractSections(content);
+        const mainKeywords = this.getSectionKeywords("template.mainTasks");
+        const mainRegex = this.buildSectionRegex(mainKeywords);
+        const mainSection = this.findSection(sections, mainRegex);
+        if (mainSection)
+          record.mainTasks = this.parseTaskLines(mainSection.content);
+        const habitKeywords = this.getSectionKeywords("template.habits");
+        const habitRegex = this.buildSectionRegex(habitKeywords);
+        const habitSection = this.findSection(sections, habitRegex);
+        if (habitSection)
+          record.habits = this.parseTaskLines(habitSection.content);
+        const extraKeywords = this.getSectionKeywords("template.extraTasks");
+        const extraRegex = this.buildSectionRegex(extraKeywords);
+        const extraSection = this.findSection(sections, extraRegex);
+        if (extraSection)
+          record.extraTasks = this.parseTaskLines(extraSection.content);
+        const pomodoroKeywords = this.getSectionKeywords("template.pomodoro");
+        const pomodoroRegex = this.buildSectionRegex(pomodoroKeywords);
+        const pomodoroSection = this.findSection(sections, pomodoroRegex);
+        if (pomodoroSection)
+          record.pomodoros = this.parsePomodoros(pomodoroSection.content);
         return record;
+      }
+      extractSections(content) {
+        const sections = [];
+        const lines = content.split("\n");
+        const headings = [];
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (line.startsWith("## ")) {
+            const title = line.substring(3).replace(/^[^\w\s（）()]*/, "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+            if (title) {
+              headings.push({ title, lineIndex: i });
+            }
+          }
+        }
+        for (let i = 0; i < headings.length; i++) {
+          const current = headings[i];
+          const next = headings[i + 1];
+          const startLine = current.lineIndex + 1;
+          const endLine = next ? next.lineIndex : lines.length;
+          const sectionLines = lines.slice(startLine, endLine);
+          const separatorIdx = sectionLines.findIndex((l) => l.trim() === "---");
+          const contentLines = separatorIdx !== -1 ? sectionLines.slice(0, separatorIdx) : sectionLines;
+          sections.push({
+            title: current.title,
+            content: contentLines.join("\n").trim()
+          });
+        }
+        return sections;
+      }
+      findSection(sections, titleRegex) {
+        for (const section of sections) {
+          if (titleRegex.test(section.title)) {
+            return section;
+          }
+        }
+        return null;
       }
       parseTaskLines(text) {
         const tasks = [];
         const lines = text.split("\n").filter((line) => line.trim());
         for (const line of lines) {
-          const match = line.match(/^\s*[-*]?\s*\[([ x])\]\s*(.+?)\s*-\s*(\d+)\s*$/i);
+          const match = line.match(/^\s*[-*]?\s*\[([ x])\]\s*(.+?)\s*-\s*(\d+)/i);
           if (!match) {
             continue;
           }
@@ -3418,9 +3477,7 @@ var require_ui = __commonJS({
       async showCheckInPanel(plugin) {
         var _a;
         const config = plugin.dataStore.config || plugin.dataStore.getDefaultConfig();
-        const stats = plugin.dataStore.getStats();
         const today = getTodayString();
-        const alreadyCheckedIn = stats.lastCheckInDate === today;
         const dailyTasks = config.dailyTasks || {
           mainTasks: { count: 3, pointsPerTask: 100 },
           habits: { items: [] },
@@ -3435,6 +3492,24 @@ var require_ui = __commonJS({
         modal.titleEl.setText(translate(plugin, "ui.checkInTitle"));
         const content = document.createElement("div");
         content.style.padding = "20px";
+        let currentPoints = 0;
+        let record = null;
+        let alreadyCheckedIn = false;
+        try {
+          const file = await Core2.findTodayNoteFile(plugin.app);
+          if (file) {
+            const noteContent = await plugin.app.vault.read(file);
+            record = plugin.parser.parseDailyNote(noteContent, today);
+            currentPoints = plugin.parser.calculatePoints(record);
+            alreadyCheckedIn = /今日积分|Today points/.test(noteContent);
+          }
+        } catch (error) {
+          console.log("No daily note found", error);
+        }
+        if (!alreadyCheckedIn) {
+          const stats = plugin.dataStore.getStats();
+          alreadyCheckedIn = stats.lastCheckInDate === today;
+        }
         if (alreadyCheckedIn) {
           content.innerHTML = `
         <div style="text-align: center; margin-bottom: 20px;">
@@ -3456,18 +3531,6 @@ var require_ui = __commonJS({
           modal.contentEl.appendChild(content);
           modal.open();
           return;
-        }
-        let currentPoints = 0;
-        let record = null;
-        try {
-          const file = await Core2.findTodayNoteFile(plugin.app);
-          if (file) {
-            const noteContent = await plugin.app.vault.read(file);
-            record = plugin.parser.parseDailyNote(noteContent, today);
-            currentPoints = plugin.parser.calculatePoints(record);
-          }
-        } catch (error) {
-          console.log("No daily note found", error);
         }
         const progressPercent = Math.min(100, Math.round(currentPoints / maxBasePoints * 100));
         const isPerfect = currentPoints >= maxBasePoints;

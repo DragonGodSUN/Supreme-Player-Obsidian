@@ -1843,12 +1843,13 @@ var require_data_store = __commonJS({
       async addCheckInPoints(basePoints) {
         this.normalizeCheckInWarmupState();
         const today = this.getLocalDateString();
-        this.recordCheckInDate(today);
         const { actualStreak, warmupStacks, effectiveStreak } = this.getEffectiveCheckInStreak();
         const multiplier = this.getCheckInBonusMultiplier(effectiveStreak);
         const awardedPoints = Math.round(basePoints * multiplier);
         await this.refreshCheckInStreakBuff(effectiveStreak);
         const result = await this.addPoints(awardedPoints);
+        this.recordCheckInDate(today);
+        await this.save();
         return {
           ...result,
           basePoints,
@@ -1926,7 +1927,7 @@ var require_data_store = __commonJS({
         wish.lastBoost = (/* @__PURE__ */ new Date()).toISOString();
         if (wish.progress >= 100) {
           const result = await this.completeWish(wishId);
-          return { success: true, wish, message: result.message, completed: true, blessings: result.blessings, bonusPoints: result.bonusPoints };
+          return { success: true, wish: null, message: result.message, completed: true, blessings: result.blessings, bonusPoints: result.bonusPoints };
         }
         await this.save();
         return { success: true, wish, message: this.t("wish.message.progress", { amount: boostAmount }), completed: false };
@@ -2807,8 +2808,6 @@ ${accountSection}
       },
       async updateDailyNote(plugin, path, originalContent, points) {
         const stats = plugin.dataStore.getStats();
-        const activeWishes = (stats.wishes || []).filter((wish) => wish.status === "active");
-        const wishPoolLines = buildWishLines(plugin, activeWishes).join("\n");
         const today = getLocalDateString();
         let newContent = originalContent;
         const accountBlock = [
@@ -2819,9 +2818,6 @@ ${accountSection}
           `> \u2B50 **${translate(plugin, "core.wishStarsLabel")}**: ${stats.wishStars}`,
           `> \u{1F3B4} **${translate(plugin, "core.rareCardsLabel")}**: ${stats.rareItemCards}`,
           `> \u{1F320} **${translate(plugin, "core.legendaryCardsLabel")}**: ${stats.legendaryItemCards}`,
-          ">",
-          `> \u26F2 **${translate(plugin, "core.wishPoolLabel")}**`,
-          ...wishPoolLines.split("\n").map((line) => line.startsWith(">") ? line : `> ${line}`),
           ">",
           `> *${translate(plugin, "core.syncedAtLabel")}: ${today}*`,
           "",
@@ -3475,8 +3471,9 @@ var require_ui = __commonJS({
         modal.open();
       },
       async showCheckInPanel(plugin) {
-        var _a;
+        var _a, _b;
         const config = plugin.dataStore.config || plugin.dataStore.getDefaultConfig();
+        const stats = plugin.dataStore.getStats();
         const today = getTodayString();
         const dailyTasks = config.dailyTasks || {
           mainTasks: { count: 3, pointsPerTask: 100 },
@@ -3488,28 +3485,28 @@ var require_ui = __commonJS({
         const habits = ((_a = dailyTasks.habits) == null ? void 0 : _a.items) || [];
         const habitsPoints = habits.reduce((sum, item) => sum + (item.points || 0), 0);
         const maxBasePoints = mainTasks.count * mainTasks.pointsPerTask + habitsPoints;
-        const modal = new Modal(plugin.app);
-        modal.titleEl.setText(translate(plugin, "ui.checkInTitle"));
-        const content = document.createElement("div");
-        content.style.padding = "20px";
         let currentPoints = 0;
         let record = null;
-        let alreadyCheckedIn = false;
         try {
           const file = await Core2.findTodayNoteFile(plugin.app);
           if (file) {
             const noteContent = await plugin.app.vault.read(file);
             record = plugin.parser.parseDailyNote(noteContent, today);
             currentPoints = plugin.parser.calculatePoints(record);
-            alreadyCheckedIn = /今日积分|Today points/.test(noteContent);
           }
         } catch (error) {
           console.log("No daily note found", error);
         }
-        if (!alreadyCheckedIn) {
-          const stats = plugin.dataStore.getStats();
-          alreadyCheckedIn = stats.lastCheckInDate === today;
+        const alreadyCheckedIn = stats.lastCheckInDate === today;
+        if (config.debugMode) {
+          console.log("[CheckIn] dataFilePath:", (_b = plugin.dataStore.config) == null ? void 0 : _b.dataFilePath);
+          console.log("[CheckIn] stats.lastCheckInDate:", stats.lastCheckInDate, "today:", today, "alreadyCheckedIn:", alreadyCheckedIn);
+          console.log("[CheckIn] full stats:", JSON.stringify(stats, null, 2).substring(0, 500));
         }
+        const modal = new Modal(plugin.app);
+        modal.titleEl.setText(translate(plugin, "ui.checkInTitle"));
+        const content = document.createElement("div");
+        content.style.padding = "20px";
         if (alreadyCheckedIn) {
           content.innerHTML = `
         <div style="text-align: center; margin-bottom: 20px;">
@@ -3628,6 +3625,11 @@ var require_ui = __commonJS({
         const confirmBtn = createButton(`\u2705 ${translate(plugin, "ui.confirmCheckIn")}`, async () => {
           modal.close();
           const result = await plugin.dataStore.addCheckInPoints(currentPoints);
+          const file = await Core2.findTodayNoteFile(plugin.app);
+          if (file) {
+            const noteContent = await plugin.app.vault.read(file);
+            await Core2.updateDailyNote(plugin, file.path, noteContent, result.awardedPoints);
+          }
           new Notice(rewardMessage(plugin, result, result.awardedPoints));
           plugin.updateStatusBar();
           this.showCheckInFrequency(plugin, { todayCompleted: true });
@@ -3705,6 +3707,11 @@ var require_ui = __commonJS({
           stats.inventory.push(rewardItem);
         }
         const result = await plugin.dataStore.addCheckInPoints(points);
+        const file = await Core2.findTodayNoteFile(plugin.app);
+        if (file) {
+          const noteContent = await plugin.app.vault.read(file);
+          await Core2.updateDailyNote(plugin, file.path, noteContent, result.awardedPoints);
+        }
         plugin.updateStatusBar();
         new Notice(rewardMessage(plugin, result, result.awardedPoints, true));
         const closeBtn = createButton(`\u{1F496} ${translate(plugin, "ui.perfectThanks")}`, () => {
@@ -3728,7 +3735,11 @@ var require_wish = __commonJS({
     var { Modal, Notice } = require("obsidian");
     var Core2 = require_core();
     function translate(plugin, key, variables) {
-      return plugin.t ? plugin.t(key, variables) : key;
+      if (plugin.t)
+        return plugin.t(key, variables);
+      if (plugin.dataStore && plugin.dataStore.t)
+        return plugin.dataStore.t(key, variables);
+      return key;
     }
     var Wish2 = {
       showWishModal(plugin) {
@@ -3779,7 +3790,7 @@ var require_wish = __commonJS({
         const stats = plugin.dataStore.getStats();
         const wishes = stats.wishes || [];
         const activeWishes = wishes.filter((wish) => wish.status === "active");
-        const completedWishes = wishes.filter((wish) => wish.status === "completed");
+        const completedCount = stats.completedWishes || 0;
         const modal = new Modal(plugin.app);
         modal.titleEl.setText(translate(plugin, "wish.poolTitle"));
         const content = document.createElement("div");
@@ -3788,7 +3799,7 @@ var require_wish = __commonJS({
         starInfo.style.cssText = "margin-bottom: 20px; padding: 10px; background-color: var(--background-secondary); border-radius: 5px;";
         starInfo.textContent = translate(plugin, "wish.poolStats", {
           stars: stats.wishStars,
-          completed: completedWishes.length
+          completed: completedCount
         });
         content.appendChild(starInfo);
         if (activeWishes.length > 0) {
@@ -3854,7 +3865,7 @@ var require_wish = __commonJS({
                     const newStats = plugin.dataStore.getStats();
                     starInfo.textContent = translate(plugin, "wish.poolStats", {
                       stars: newStats.wishStars,
-                      completed: completedWishes.length
+                      completed: newStats.completedWishes || 0
                     });
                     new Notice(translate(plugin, "wish.investSuccess"));
                   }

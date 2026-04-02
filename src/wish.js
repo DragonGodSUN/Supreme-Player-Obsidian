@@ -2,7 +2,9 @@ const { Modal, Notice } = require("obsidian");
 const Core = require("./core");
 
 function translate(plugin, key, variables) {
-  return plugin.t ? plugin.t(key, variables) : key;
+  if (plugin.t) return plugin.t(key, variables);
+  if (plugin.dataStore && plugin.dataStore.t) return plugin.dataStore.t(key, variables);
+  return key;
 }
 
 const Wish = {
@@ -63,7 +65,7 @@ const Wish = {
     const stats = plugin.dataStore.getStats();
     const wishes = stats.wishes || [];
     const activeWishes = wishes.filter(wish => wish.status === "active");
-    const completedWishes = wishes.filter(wish => wish.status === "completed");
+    const completedCount = stats.completedWishes || 0;
 
     const modal = new Modal(plugin.app);
     modal.titleEl.setText(translate(plugin, "wish.poolTitle"));
@@ -75,7 +77,7 @@ const Wish = {
     starInfo.style.cssText = "margin-bottom: 20px; padding: 10px; background-color: var(--background-secondary); border-radius: 5px;";
     starInfo.textContent = translate(plugin, "wish.poolStats", {
       stars: stats.wishStars,
-      completed: completedWishes.length,
+      completed: completedCount,
     });
     content.appendChild(starInfo);
 
@@ -147,7 +149,7 @@ const Wish = {
                 const newStats = plugin.dataStore.getStats();
                 starInfo.textContent = translate(plugin, "wish.poolStats", {
                   stars: newStats.wishStars,
-                  completed: completedWishes.length,
+                  completed: newStats.completedWishes || 0,
                 });
                 new Notice(translate(plugin, "wish.investSuccess"));
               }

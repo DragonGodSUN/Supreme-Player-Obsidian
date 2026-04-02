@@ -334,8 +334,6 @@ const Core = {
 
   async updateDailyNote(plugin, path, originalContent, points) {
     const stats = plugin.dataStore.getStats();
-    const activeWishes = (stats.wishes || []).filter(wish => wish.status === "active");
-    const wishPoolLines = buildWishLines(plugin, activeWishes).join("\n");
     const today = getLocalDateString();
 
     let newContent = originalContent;
@@ -347,9 +345,6 @@ const Core = {
       `> ⭐ **${translate(plugin, "core.wishStarsLabel")}**: ${stats.wishStars}`,
       `> 🎴 **${translate(plugin, "core.rareCardsLabel")}**: ${stats.rareItemCards}`,
       `> 🌠 **${translate(plugin, "core.legendaryCardsLabel")}**: ${stats.legendaryItemCards}`,
-      ">",
-      `> ⛲ **${translate(plugin, "core.wishPoolLabel")}**`,
-      ...wishPoolLines.split("\n").map(line => line.startsWith(">") ? line : `> ${line}`),
       ">",
       `> *${translate(plugin, "core.syncedAtLabel")}: ${today}*`,
       "",

@@ -231,6 +231,12 @@ var require_i18n = __commonJS({
         "wish.errorNameRequired": "Please enter a wish name.",
         "wish.errorNotEnoughStars": "Not enough wish stars.",
         "wish.investSuccess": "Investment successful! Progress +10%",
+        "wish.historyTitle": "Wish History",
+        "wish.historyEmpty": "No completed wishes yet.",
+        "wish.historyItem": "{name} - {date}",
+        "wish.historyBack": "Back to Wish Pool",
+        "wish.historyDelete": "Delete this record",
+        "wish.historyDeleteConfirm": "Delete this wish record? This cannot be undone.",
         "ui.levelSystemTitle": "Level & Title System",
         "ui.currentLevel": "Current Level",
         "ui.totalPoints": "Total Points",
@@ -720,6 +726,12 @@ var require_i18n = __commonJS({
         "wish.errorNameRequired": "\u8BF7\u8F93\u5165\u613F\u671B\u540D\u79F0\u3002",
         "wish.errorNotEnoughStars": "\u613F\u661F\u4E0D\u8DB3\u3002",
         "wish.investSuccess": "\u6295\u5165\u6210\u529F\uFF01\u8FDB\u5EA6 +10%",
+        "wish.historyTitle": "\u8BB8\u613F\u5386\u53F2",
+        "wish.historyEmpty": "\u6682\u65E0\u5DF2\u5B8C\u6210\u7684\u613F\u671B\u3002",
+        "wish.historyItem": "{name} - {date}",
+        "wish.historyBack": "\u8FD4\u56DE\u8BB8\u613F\u6C60",
+        "wish.historyDelete": "\u5220\u9664\u6B64\u8BB0\u5F55",
+        "wish.historyDeleteConfirm": "\u786E\u5B9A\u5220\u9664\u6B64\u8BB8\u613F\u8BB0\u5F55\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002",
         "ui.levelSystemTitle": "\u7B49\u7EA7\u4E0E\u79F0\u53F7\u7CFB\u7EDF",
         "ui.currentLevel": "\u5F53\u524D\u7B49\u7EA7",
         "ui.totalPoints": "\u603B\u79EF\u5206",
@@ -3795,6 +3807,8 @@ var require_wish = __commonJS({
         modal.titleEl.setText(translate(plugin, "wish.poolTitle"));
         const content = document.createElement("div");
         content.style.padding = "20px";
+        content.style.maxHeight = "70vh";
+        content.style.overflowY = "auto";
         const starInfo = document.createElement("div");
         starInfo.style.cssText = "margin-bottom: 20px; padding: 10px; background-color: var(--background-secondary); border-radius: 5px;";
         starInfo.textContent = translate(plugin, "wish.poolStats", {
@@ -3890,6 +3904,17 @@ var require_wish = __commonJS({
           this.showWishModal(plugin);
         };
         content.appendChild(newWishBtn);
+        if (stats.completedWishRecords && stats.completedWishRecords.length > 0) {
+          const historyBtn = document.createElement("button");
+          historyBtn.textContent = `\u{1F4DC} ${translate(plugin, "wish.historyTitle")}`;
+          historyBtn.style.width = "100%";
+          historyBtn.style.marginTop = "10px";
+          historyBtn.onclick = () => {
+            modal.close();
+            this.showWishHistory(plugin);
+          };
+          content.appendChild(historyBtn);
+        }
         const buttonContainer = document.createElement("div");
         buttonContainer.style.display = "flex";
         buttonContainer.style.gap = "10px";
@@ -3934,6 +3959,88 @@ var require_wish = __commonJS({
         closeBtn.style.width = "100%";
         closeBtn.onclick = () => modal.close();
         content.appendChild(closeBtn);
+        modal.contentEl.appendChild(content);
+        modal.open();
+      },
+      showWishHistory(plugin) {
+        const stats = plugin.dataStore.getStats();
+        const records = stats.completedWishRecords || [];
+        const modal = new Modal(plugin.app);
+        modal.titleEl.setText(translate(plugin, "wish.historyTitle"));
+        const content = document.createElement("div");
+        content.style.padding = "20px";
+        content.style.maxHeight = "70vh";
+        content.style.overflowY = "auto";
+        if (records.length === 0) {
+          const emptyDiv = document.createElement("div");
+          emptyDiv.style.cssText = "text-align: center; color: #888; padding: 20px;";
+          emptyDiv.textContent = translate(plugin, "wish.historyEmpty");
+          content.appendChild(emptyDiv);
+        } else {
+          for (let i = records.length - 1; i >= 0; i--) {
+            const record = records[i];
+            const date = new Date(record.completedAt).toLocaleDateString();
+            const wishDiv = document.createElement("div");
+            wishDiv.style.cssText = "padding: 15px; margin-bottom: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--background-secondary);";
+            const headerDiv = document.createElement("div");
+            headerDiv.style.cssText = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;";
+            const nameSpan = document.createElement("span");
+            nameSpan.style.cssText = "font-weight: bold; font-size: 15px;";
+            nameSpan.textContent = `\u{1F31F} ${record.name}`;
+            const dateSpan = document.createElement("span");
+            dateSpan.style.cssText = "color: #888; font-size: 12px;";
+            dateSpan.textContent = date;
+            const deleteBtn = document.createElement("button");
+            deleteBtn.textContent = "\u{1F5D1}";
+            deleteBtn.style.cssText = "background: none; border: none; cursor: pointer; font-size: 14px; padding: 4px 8px; opacity: 0.6;";
+            deleteBtn.title = translate(plugin, "wish.historyDelete");
+            deleteBtn.onclick = async () => {
+              if (confirm(translate(plugin, "wish.historyDeleteConfirm"))) {
+                const newStats = plugin.dataStore.getStats();
+                const idx = newStats.completedWishRecords.findIndex((r) => r.id === record.id);
+                if (idx !== -1) {
+                  newStats.completedWishRecords.splice(idx, 1);
+                  await plugin.dataStore.save();
+                  modal.close();
+                  this.showWishHistory(plugin);
+                }
+              }
+            };
+            headerDiv.appendChild(nameSpan);
+            headerDiv.appendChild(dateSpan);
+            headerDiv.appendChild(deleteBtn);
+            wishDiv.appendChild(headerDiv);
+            if (record.description) {
+              const descDiv = document.createElement("div");
+              descDiv.style.cssText = "color: #888; font-size: 13px; margin-bottom: 8px;";
+              descDiv.textContent = record.description;
+              wishDiv.appendChild(descDiv);
+            }
+            const pointsDiv = document.createElement("div");
+            pointsDiv.style.cssText = "color: #ffd700; font-size: 13px;";
+            pointsDiv.textContent = `+${record.bonusPoints || 500} ${translate(plugin, "ui.pointsUnit")}`;
+            wishDiv.appendChild(pointsDiv);
+            content.appendChild(wishDiv);
+          }
+        }
+        const buttonContainer = document.createElement("div");
+        buttonContainer.style.display = "flex";
+        buttonContainer.style.gap = "10px";
+        buttonContainer.style.marginTop = "10px";
+        const backBtn = document.createElement("button");
+        backBtn.textContent = `\u21A9 ${translate(plugin, "wish.historyBack")}`;
+        backBtn.style.flex = "1";
+        backBtn.onclick = () => {
+          modal.close();
+          this.showWishPool(plugin);
+        };
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = `\u2716 ${translate(plugin, "common.close")}`;
+        closeBtn.style.flex = "1";
+        closeBtn.onclick = () => modal.close();
+        buttonContainer.appendChild(backBtn);
+        buttonContainer.appendChild(closeBtn);
+        content.appendChild(buttonContainer);
         modal.contentEl.appendChild(content);
         modal.open();
       }

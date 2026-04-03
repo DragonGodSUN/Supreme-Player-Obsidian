@@ -72,6 +72,8 @@ const Wish = {
 
     const content = document.createElement("div");
     content.style.padding = "20px";
+    content.style.maxHeight = "70vh";
+    content.style.overflowY = "auto";
 
     const starInfo = document.createElement("div");
     starInfo.style.cssText = "margin-bottom: 20px; padding: 10px; background-color: var(--background-secondary); border-radius: 5px;";
@@ -177,6 +179,18 @@ const Wish = {
     };
     content.appendChild(newWishBtn);
 
+    if (stats.completedWishRecords && stats.completedWishRecords.length > 0) {
+      const historyBtn = document.createElement("button");
+      historyBtn.textContent = `📜 ${translate(plugin, "wish.historyTitle")}`;
+      historyBtn.style.width = "100%";
+      historyBtn.style.marginTop = "10px";
+      historyBtn.onclick = () => {
+        modal.close();
+        this.showWishHistory(plugin);
+      };
+      content.appendChild(historyBtn);
+    }
+
     const buttonContainer = document.createElement("div");
     buttonContainer.style.display = "flex";
     buttonContainer.style.gap = "10px";
@@ -229,6 +243,105 @@ const Wish = {
     closeBtn.style.width = "100%";
     closeBtn.onclick = () => modal.close();
     content.appendChild(closeBtn);
+
+    modal.contentEl.appendChild(content);
+    modal.open();
+  },
+
+  showWishHistory(plugin) {
+    const stats = plugin.dataStore.getStats();
+    const records = stats.completedWishRecords || [];
+
+    const modal = new Modal(plugin.app);
+    modal.titleEl.setText(translate(plugin, "wish.historyTitle"));
+
+    const content = document.createElement("div");
+    content.style.padding = "20px";
+    content.style.maxHeight = "70vh";
+    content.style.overflowY = "auto";
+
+    if (records.length === 0) {
+      const emptyDiv = document.createElement("div");
+      emptyDiv.style.cssText = "text-align: center; color: #888; padding: 20px;";
+      emptyDiv.textContent = translate(plugin, "wish.historyEmpty");
+      content.appendChild(emptyDiv);
+    } else {
+      for (let i = records.length - 1; i >= 0; i--) {
+        const record = records[i];
+        const date = new Date(record.completedAt).toLocaleDateString();
+        const wishDiv = document.createElement("div");
+        wishDiv.style.cssText = "padding: 15px; margin-bottom: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--background-secondary);";
+
+        const headerDiv = document.createElement("div");
+        headerDiv.style.cssText = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.style.cssText = "font-weight: bold; font-size: 15px;";
+        nameSpan.textContent = `🌟 ${record.name}`;
+
+        const dateSpan = document.createElement("span");
+        dateSpan.style.cssText = "color: #888; font-size: 12px;";
+        dateSpan.textContent = date;
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "🗑";
+        deleteBtn.style.cssText = "background: none; border: none; cursor: pointer; font-size: 14px; padding: 4px 8px; opacity: 0.6;";
+        deleteBtn.title = translate(plugin, "wish.historyDelete");
+        deleteBtn.onclick = async () => {
+          if (confirm(translate(plugin, "wish.historyDeleteConfirm"))) {
+            const newStats = plugin.dataStore.getStats();
+            const idx = newStats.completedWishRecords.findIndex(r => r.id === record.id);
+            if (idx !== -1) {
+              newStats.completedWishRecords.splice(idx, 1);
+              await plugin.dataStore.save();
+              modal.close();
+              this.showWishHistory(plugin);
+            }
+          }
+        };
+
+        headerDiv.appendChild(nameSpan);
+        headerDiv.appendChild(dateSpan);
+        headerDiv.appendChild(deleteBtn);
+        wishDiv.appendChild(headerDiv);
+
+        if (record.description) {
+          const descDiv = document.createElement("div");
+          descDiv.style.cssText = "color: #888; font-size: 13px; margin-bottom: 8px;";
+          descDiv.textContent = record.description;
+          wishDiv.appendChild(descDiv);
+        }
+
+        const pointsDiv = document.createElement("div");
+        pointsDiv.style.cssText = "color: #ffd700; font-size: 13px;";
+        pointsDiv.textContent = `+${record.bonusPoints || 500} ${translate(plugin, "ui.pointsUnit")}`;
+        wishDiv.appendChild(pointsDiv);
+
+        content.appendChild(wishDiv);
+      }
+    }
+
+    const buttonContainer = document.createElement("div");
+    buttonContainer.style.display = "flex";
+    buttonContainer.style.gap = "10px";
+    buttonContainer.style.marginTop = "10px";
+
+    const backBtn = document.createElement("button");
+    backBtn.textContent = `↩ ${translate(plugin, "wish.historyBack")}`;
+    backBtn.style.flex = "1";
+    backBtn.onclick = () => {
+      modal.close();
+      this.showWishPool(plugin);
+    };
+
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = `✖ ${translate(plugin, "common.close")}`;
+    closeBtn.style.flex = "1";
+    closeBtn.onclick = () => modal.close();
+
+    buttonContainer.appendChild(backBtn);
+    buttonContainer.appendChild(closeBtn);
+    content.appendChild(buttonContainer);
 
     modal.contentEl.appendChild(content);
     modal.open();

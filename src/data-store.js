@@ -718,6 +718,7 @@ class DataStore {
   async addCheckInPoints(basePoints) {
     this.normalizeCheckInWarmupState();
     const today = this.getLocalDateString();
+    this.recordCheckInDate(today);
 
     const { actualStreak, warmupStacks, effectiveStreak } = this.getEffectiveCheckInStreak();
     const multiplier = this.getCheckInBonusMultiplier(effectiveStreak);
@@ -725,10 +726,6 @@ class DataStore {
 
     await this.refreshCheckInStreakBuff(effectiveStreak);
     const result = await this.addPoints(awardedPoints);
-
-    // Record check-in date AFTER all async operations succeed, then save
-    this.recordCheckInDate(today);
-    await this.save();
 
     return {
       ...result,

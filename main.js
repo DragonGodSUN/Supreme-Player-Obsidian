@@ -1855,13 +1855,12 @@ var require_data_store = __commonJS({
       async addCheckInPoints(basePoints) {
         this.normalizeCheckInWarmupState();
         const today = this.getLocalDateString();
+        this.recordCheckInDate(today);
         const { actualStreak, warmupStacks, effectiveStreak } = this.getEffectiveCheckInStreak();
         const multiplier = this.getCheckInBonusMultiplier(effectiveStreak);
         const awardedPoints = Math.round(basePoints * multiplier);
         await this.refreshCheckInStreakBuff(effectiveStreak);
         const result = await this.addPoints(awardedPoints);
-        this.recordCheckInDate(today);
-        await this.save();
         return {
           ...result,
           basePoints,

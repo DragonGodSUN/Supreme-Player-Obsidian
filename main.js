@@ -538,6 +538,28 @@ var require_i18n = __commonJS({
         "datastore.shop.mystery-box.desc": "Randomly get 1-10 wish stars.",
         "datastore.shop.milk.name": "Milk",
         "datastore.shop.milk.desc": "Clear all active buffs.",
+        "datastore.shop.double-points-potion.name": "Double Points Potion",
+        "datastore.shop.double-points-potion.desc": "Next check-in points are doubled. Lasts 24 hours.",
+        "datastore.shop.streak-shield.name": "Streak Shield",
+        "datastore.shop.streak-shield.desc": "Protects your check-in streak once. Missing a day won't reset your streak.",
+        "datastore.shop.mystery-box-plus.name": "Mystery Box Plus",
+        "datastore.shop.mystery-box-plus.desc": "Randomly get 1-20 wish stars, with a 10% chance of getting 50.",
+        "datastore.shop.wheel-of-fortune.name": "Wheel of Fortune",
+        "datastore.shop.wheel-of-fortune.desc": "Spin the wheel and randomly receive one rare item from the shop.",
+        "datastore.shop.legendary-chest.name": "Legendary Chest",
+        "datastore.shop.legendary-chest.desc": "Open to get 1-3 random rare items, with a 10% chance of an extra legendary item.",
+        "datastore.shop.treat-coupon.name": "Treat Coupon",
+        "datastore.shop.treat-coupon.desc": "Redeem for a dessert or snack of your choice.",
+        "datastore.shop.game-time-coupon.name": "Game Time Coupon (1h)",
+        "datastore.shop.game-time-coupon.desc": "Redeem for 1 hour of guilt-free gaming time.",
+        "datastore.shop.movie-night.name": "Movie Night",
+        "datastore.shop.movie-night.desc": "Redeem to watch a movie you've been wanting to see.",
+        "datastore.shop.small-wish-coupon.name": "Small Wish Coupon",
+        "datastore.shop.small-wish-coupon.desc": "Redeem to buy something small you've been wanting.",
+        "datastore.shop.rest-day-pass.name": "Rest Day Pass",
+        "datastore.shop.rest-day-pass.desc": "Take a day off without breaking your streak or feeling guilty.",
+        "datastore.shop.big-wish-coupon.name": "Big Wish Coupon",
+        "datastore.shop.big-wish-coupon.desc": "Redeem to buy something big you've always wanted.",
         "datastore.reward.superDiamond.name": "Super Diamond",
         "datastore.reward.superDiamond.desc": "Perfect check-in reward. Grants random wish stars and a strong luck buff.",
         "datastore.reward.defaultBlessingTitle": "Excellent work!",
@@ -556,6 +578,10 @@ var require_i18n = __commonJS({
         "inventory.effect.buff": "Gain buff: {name}",
         "inventory.effect.superDiamond": "Gain {value} wish stars and Super Luck",
         "inventory.effect.clearAllBuffs": "All buffs cleared",
+        "inventory.effect.streakShield": "Streak shield activated. You have {value} shield(s) remaining",
+        "inventory.effect.randomRareItem": "Spun the wheel and got: {name}",
+        "inventory.effect.legendaryChest": "Opened the chest and got {count} item(s)",
+        "inventory.effect.randomWishStarsPlus": "Gain {value} wish stars (bonus!)",
         "inventory.buff.superLuckName": "Super Luck",
         "inventory.buff.superLuckDesc": "Starlight surrounds you and luck surges.",
         "inventory.buff.checkInEnhanceName": "Enhanced",
@@ -1033,6 +1059,28 @@ var require_i18n = __commonJS({
         "datastore.shop.mystery-box.desc": "\u968F\u673A\u83B7\u5F97 1-10 \u4E2A\u613F\u661F\u3002",
         "datastore.shop.milk.name": "\u725B\u5976",
         "datastore.shop.milk.desc": "\u6E05\u9664\u6240\u6709\u5F53\u524D Buff\u3002",
+        "datastore.shop.double-points-potion.name": "\u53CC\u500D\u79EF\u5206\u836F\u6C34",
+        "datastore.shop.double-points-potion.desc": "\u4E0B\u6B21\u6253\u5361\u79EF\u5206\u7FFB\u500D\uFF0C\u6301\u7EED 24 \u5C0F\u65F6\u3002",
+        "datastore.shop.streak-shield.name": "\u8FDE\u7B7E\u62A4\u76FE",
+        "datastore.shop.streak-shield.desc": "\u4FDD\u62A4\u4E00\u6B21\u8FDE\u7B7E\u8BB0\u5F55\uFF0C\u65AD\u7B7E\u65F6\u4E0D\u4F1A\u91CD\u7F6E\u8FDE\u7EED\u5929\u6570\u3002",
+        "datastore.shop.mystery-box-plus.name": "\u795E\u79D8\u793C\u76D2 Plus",
+        "datastore.shop.mystery-box-plus.desc": "\u968F\u673A\u83B7\u5F97 1-20 \u4E2A\u613F\u661F\uFF0C10% \u6982\u7387\u83B7\u5F97 50 \u4E2A\u3002",
+        "datastore.shop.wheel-of-fortune.name": "\u547D\u8FD0\u4E4B\u8F6E",
+        "datastore.shop.wheel-of-fortune.desc": "\u8F6C\u52A8\u547D\u8FD0\u4E4B\u8F6E\uFF0C\u968F\u673A\u83B7\u5F97\u5546\u5E97\u4E2D\u4E00\u4EF6\u7A00\u6709\u5546\u54C1\u3002",
+        "datastore.shop.legendary-chest.name": "\u4F20\u5947\u5B9D\u7BB1",
+        "datastore.shop.legendary-chest.desc": "\u5F00\u542F\u540E\u968F\u673A\u83B7\u5F97 1-3 \u4EF6\u7A00\u6709\u9053\u5177\uFF0C10% \u6982\u7387\u989D\u5916\u83B7\u5F97\u4E00\u4EF6\u4F20\u5947\u9053\u5177\u3002",
+        "datastore.shop.treat-coupon.name": "\u751C\u54C1\u5238",
+        "datastore.shop.treat-coupon.desc": "\u5151\u6362\u4E00\u4EFD\u81EA\u5DF1\u559C\u6B22\u7684\u751C\u54C1\u6216\u96F6\u98DF\u3002",
+        "datastore.shop.game-time-coupon.name": "\u6E38\u620F\u65F6\u95F4\u5238\uFF081h\uFF09",
+        "datastore.shop.game-time-coupon.desc": "\u5151\u6362 1 \u5C0F\u65F6\u65E0\u8D1F\u7F6A\u611F\u7684\u6E38\u620F\u65F6\u95F4\u3002",
+        "datastore.shop.movie-night.name": "\u7535\u5F71\u4E4B\u591C",
+        "datastore.shop.movie-night.desc": "\u5151\u6362\u770B\u4E00\u90E8\u4E00\u76F4\u60F3\u770B\u7684\u7535\u5F71\u3002",
+        "datastore.shop.small-wish-coupon.name": "\u5FC3\u613F\u8D2D\u7269\u5238\uFF08\u5C0F\uFF09",
+        "datastore.shop.small-wish-coupon.desc": "\u5151\u6362\u8D2D\u4E70\u4E00\u4EF6\u5C0F\u5FC3\u613F\u7269\u54C1\u3002",
+        "datastore.shop.rest-day-pass.name": "\u4F11\u606F\u65E5\u901A\u884C\u8BC1",
+        "datastore.shop.rest-day-pass.desc": "\u7ED9\u81EA\u5DF1\u653E\u4E00\u5929\u5047\uFF0C\u4E0D\u6253\u5361\u4E5F\u4E0D\u5F71\u54CD\u8FDE\u7B7E\u3002",
+        "datastore.shop.big-wish-coupon.name": "\u5927\u5FC3\u613F\u5151\u6362\u5238",
+        "datastore.shop.big-wish-coupon.desc": "\u5151\u6362\u8D2D\u4E70\u4E00\u4EF6\u4E00\u76F4\u60F3\u8981\u7684\u5927\u4EF6\u7269\u54C1\u3002",
         "datastore.reward.superDiamond.name": "\u8D85\u7EA7\u5927\u94BB\u77F3",
         "datastore.reward.superDiamond.desc": "\u5B8C\u7F8E\u6253\u5361\u5956\u52B1\u3002\u63D0\u4F9B\u968F\u673A\u613F\u661F\u548C\u5F3A\u529B\u5E78\u8FD0 Buff\u3002",
         "datastore.reward.defaultBlessingTitle": "\u505A\u5F97\u592A\u68D2\u4E86\uFF01",
@@ -1051,6 +1099,10 @@ var require_i18n = __commonJS({
         "inventory.effect.buff": "\u83B7\u5F97 Buff\uFF1A{name}",
         "inventory.effect.superDiamond": "\u83B7\u5F97 {value} \u4E2A\u613F\u661F\u5E76\u89E6\u53D1\u8D85\u7EA7\u5E78\u8FD0",
         "inventory.effect.clearAllBuffs": "\u5DF2\u6E05\u9664\u6240\u6709 Buff",
+        "inventory.effect.streakShield": "\u8FDE\u7B7E\u62A4\u76FE\u5DF2\u6FC0\u6D3B\uFF0C\u5F53\u524D\u5269\u4F59 {value} \u5C42\u62A4\u76FE",
+        "inventory.effect.randomRareItem": "\u547D\u8FD0\u4E4B\u8F6E\u8F6C\u51FA\u4E86\uFF1A{name}",
+        "inventory.effect.legendaryChest": "\u5F00\u542F\u5B9D\u7BB1\u83B7\u5F97\u4E86 {count} \u4EF6\u9053\u5177",
+        "inventory.effect.randomWishStarsPlus": "\u83B7\u5F97 {value} \u4E2A\u613F\u661F\uFF08\u5927\u5956\uFF01\uFF09",
         "inventory.buff.superLuckName": "\u8D85\u7EA7\u5E78\u8FD0",
         "inventory.buff.superLuckDesc": "\u661F\u5149\u73AF\u7ED5\uFF0C\u5E78\u8FD0\u6B63\u5728\u6D8C\u6765\u3002",
         "inventory.buff.checkInEnhanceName": "\u5F3A\u5316",
@@ -1331,12 +1383,12 @@ var require_data_store = __commonJS({
       }
       getBuiltinLevelDefinitions() {
         return [
-          { minLevel: 0, maxLevel: 5, color: "#9966ff", abilityIcon: "\u2728", phaseIcon: "\u{1FA84}" },
-          { minLevel: 6, maxLevel: 10, color: "#00aaff", abilityIcon: "\u{1F52E}", phaseIcon: "\u{1FAE7}" },
-          { minLevel: 11, maxLevel: 15, color: "#00ffaa", abilityIcon: "\u{1F6E0}\uFE0F", phaseIcon: "\u{1F451}" },
-          { minLevel: 16, maxLevel: 20, color: "#ffaa00", abilityIcon: "\u{1F30D}", phaseIcon: "\u{1F9FF}" },
-          { minLevel: 21, maxLevel: 25, color: "#ff6666", abilityIcon: "\u{1F30C}", phaseIcon: "\u{1F47E}" },
-          { minLevel: 26, maxLevel: 999, color: "#ffd700", abilityIcon: "\u267E\uFE0F", phaseIcon: "\u2182" }
+          { minLevel: 0, maxLevel: 19, color: "#9966ff", abilityIcon: "\u2728", phaseIcon: "\u{1FA84}" },
+          { minLevel: 20, maxLevel: 39, color: "#00aaff", abilityIcon: "\u{1F52E}", phaseIcon: "\u{1FAE7}" },
+          { minLevel: 40, maxLevel: 59, color: "#00ffaa", abilityIcon: "\u{1F6E0}\uFE0F", phaseIcon: "\u{1F451}" },
+          { minLevel: 60, maxLevel: 79, color: "#ffaa00", abilityIcon: "\u{1F30D}", phaseIcon: "\u{1F9FF}" },
+          { minLevel: 80, maxLevel: 99, color: "#ff6666", abilityIcon: "\u{1F30C}", phaseIcon: "\u{1F47E}" },
+          { minLevel: 100, maxLevel: 999, color: "#ffd700", abilityIcon: "\u267E\uFE0F", phaseIcon: "\u2182" }
         ];
       }
       getLocalizedBuiltinLevel(index) {
@@ -1353,9 +1405,20 @@ var require_data_store = __commonJS({
       getBuiltinShopDefinitions() {
         return [
           { id: "wish-star-boost", category: "system", type: "consumable", rarity: "rare", price: 1, icon: "\u2B50", effect: { type: "add_wish_stars", value: 5 }, editable: false },
-          { id: "level-skip", category: "system", type: "consumable", rarity: "legendary", price: 5, icon: "\u23EB", effect: { type: "add_points", value: 5e3 }, editable: false },
-          { id: "warmup-card", category: "system", type: "consumable", rarity: "rare", price: 10, icon: "\u{1F525}", effect: { type: "checkin_warmup", value: 1 }, editable: false },
-          { id: "mystery-box", category: "system", type: "consumable", rarity: "rare", price: 1, icon: "\u{1F381}", effect: { type: "random_wish_stars", min: 1, max: 10 }, editable: true }
+          { id: "level-skip", category: "system", type: "consumable", rarity: "legendary", price: 2, icon: "\u23EB", effect: { type: "add_points", value: 5e3 }, editable: false },
+          { id: "warmup-card", category: "system", type: "consumable", rarity: "rare", price: 3, icon: "\u{1F525}", effect: { type: "checkin_warmup", value: 1 }, editable: false },
+          { id: "mystery-box", category: "system", type: "consumable", rarity: "rare", price: 1, icon: "\u{1F381}", effect: { type: "random_wish_stars", min: 1, max: 10 }, editable: true },
+          { id: "double-points-potion", category: "system", type: "consumable", rarity: "rare", price: 5, icon: "\u{1F4AB}", effect: { type: "buff", buffName: this.t("datastore.shop.double-points-potion.name"), buffIcon: "\u{1F4AB}", buffDesc: this.t("datastore.shop.double-points-potion.desc"), duration: 24 }, editable: false },
+          { id: "streak-shield", category: "system", type: "consumable", rarity: "legendary", price: 3, icon: "\u{1F6E1}\uFE0F", effect: { type: "streak_shield", value: 1 }, editable: false },
+          { id: "mystery-box-plus", category: "system", type: "consumable", rarity: "rare", price: 3, icon: "\u{1F381}", effect: { type: "random_wish_stars_plus", min: 1, max: 20, bonusChance: 0.1, bonusAmount: 50 }, editable: false },
+          { id: "wheel-of-fortune", category: "system", type: "consumable", rarity: "legendary", price: 1, icon: "\u{1F0CF}", effect: { type: "random_rare_item" }, editable: false },
+          { id: "legendary-chest", category: "system", type: "consumable", rarity: "legendary", price: 3, icon: "\u{1F4E6}", effect: { type: "legendary_chest" }, editable: false },
+          { id: "treat-coupon", category: "external", type: "consumable", rarity: "rare", price: 3, icon: "\u{1F370}", effect: null, editable: true },
+          { id: "game-time-coupon", category: "external", type: "consumable", rarity: "rare", price: 5, icon: "\u{1F3AE}", effect: null, editable: true },
+          { id: "movie-night", category: "external", type: "consumable", rarity: "rare", price: 8, icon: "\u{1F3AC}", effect: null, editable: true },
+          { id: "small-wish-coupon", category: "external", type: "consumable", rarity: "legendary", price: 2, icon: "\u{1F6D2}", effect: null, editable: true },
+          { id: "rest-day-pass", category: "external", type: "consumable", rarity: "legendary", price: 5, icon: "\u{1F3D6}\uFE0F", effect: null, editable: true },
+          { id: "big-wish-coupon", category: "external", type: "consumable", rarity: "legendary", price: 10, icon: "\u{1F381}", effect: null, editable: true }
         ];
       }
       getLocalizedBuiltinShopItem(id) {
@@ -1625,6 +1688,8 @@ var require_data_store = __commonJS({
           this.stats.checkInWarmupStacks = 0;
         if (this.stats.checkInWarmupAnchorDate === void 0)
           this.stats.checkInWarmupAnchorDate = null;
+        if (this.stats.streakShieldCount === void 0)
+          this.stats.streakShieldCount = 0;
         if (this.stats.playerName === void 0)
           this.stats.playerName = this.t("settings.defaultPlayerName");
         if (this.stats.todayPoints === void 0)
@@ -1690,6 +1755,7 @@ var require_data_store = __commonJS({
           checkInHistory: [],
           checkInWarmupStacks: 0,
           checkInWarmupAnchorDate: null,
+          streakShieldCount: 0,
           wishes: [],
           inventory: [],
           usedExternalItems: [],
@@ -1772,8 +1838,23 @@ var require_data_store = __commonJS({
         if (actualStreak > 0) {
           return true;
         }
+        const today = this.getLocalDateString(referenceDate);
         const yesterday = this.getYesterdayString(referenceDate);
-        return stats.lastCheckInDate === yesterday;
+        if (stats.lastCheckInDate === today || stats.lastCheckInDate === yesterday) {
+          return true;
+        }
+        if (!stats.lastCheckInDate && (!stats.checkInHistory || stats.checkInHistory.length === 0)) {
+          return true;
+        }
+        if (stats.checkInWarmupAnchorDate === today || stats.checkInWarmupAnchorDate === yesterday) {
+          return true;
+        }
+        if (stats.streakShieldCount > 0) {
+          stats.streakShieldCount -= 1;
+          stats.lastCheckInDate = yesterday;
+          return true;
+        }
+        return false;
       }
       normalizeCheckInWarmupState(referenceDate = /* @__PURE__ */ new Date()) {
         const stats = this.getStats();
@@ -1938,7 +2019,7 @@ var require_data_store = __commonJS({
         wish.lastBoost = (/* @__PURE__ */ new Date()).toISOString();
         if (wish.progress >= 100) {
           const result = await this.completeWish(wishId);
-          return { success: true, wish: null, message: result.message, completed: true, blessings: result.blessings, bonusPoints: result.bonusPoints };
+          return { success: true, wish, message: result.message, completed: true, blessings: result.blessings, bonusPoints: result.bonusPoints };
         }
         await this.save();
         return { success: true, wish, message: this.t("wish.message.progress", { amount: boostAmount }), completed: false };
@@ -2139,6 +2220,87 @@ var require_data_store = __commonJS({
                 stats.buffs = [];
                 effectMessage = this.t("inventory.effect.clearAllBuffs");
                 break;
+              case "streak_shield": {
+                stats.streakShieldCount = (stats.streakShieldCount || 0) + (effect.value || 1);
+                effectMessage = this.t("inventory.effect.streakShield", { value: stats.streakShieldCount });
+                break;
+              }
+              case "random_wish_stars_plus": {
+                const plusMin = effect.min || 1;
+                const plusMax = effect.max || 20;
+                let plusAmount = Math.floor(Math.random() * (plusMax - plusMin + 1)) + plusMin;
+                const bonusChance = effect.bonusChance || 0.1;
+                const bonusAmount = effect.bonusAmount || 50;
+                if (Math.random() < bonusChance) {
+                  plusAmount = bonusAmount;
+                  effectMessage = this.t("inventory.effect.randomWishStarsPlus", { value: plusAmount });
+                } else {
+                  effectMessage = this.t("inventory.effect.randomWishStars", { value: plusAmount });
+                }
+                stats.wishStars += plusAmount;
+                break;
+              }
+              case "random_rare_item": {
+                const allShopItems = this.getShopItems().filter((si) => si.rarity === "rare" && si.category === "system");
+                if (allShopItems.length > 0) {
+                  const randomItem = allShopItems[Math.floor(Math.random() * allShopItems.length)];
+                  const rewardItem = {
+                    instanceId: "inv-" + Date.now().toString(),
+                    itemId: randomItem.id,
+                    name: randomItem.name,
+                    description: randomItem.description,
+                    icon: randomItem.icon,
+                    category: randomItem.category || "system",
+                    rarity: randomItem.rarity,
+                    effect: randomItem.effect,
+                    purchasedAt: (/* @__PURE__ */ new Date()).toISOString()
+                  };
+                  stats.inventory.push(rewardItem);
+                  effectMessage = this.t("inventory.effect.randomRareItem", { name: randomItem.name });
+                } else {
+                  stats.wishStars += 5;
+                  effectMessage = this.t("inventory.effect.addWishStars", { value: 5 });
+                }
+                break;
+              }
+              case "legendary_chest": {
+                const rarePool = this.getShopItems().filter((si) => si.rarity === "rare" && si.category === "system");
+                const legendaryPool = this.getShopItems().filter((si) => si.rarity === "legendary" && si.category === "system");
+                const rareCount = Math.floor(Math.random() * 3) + 1;
+                let chestCount = 0;
+                for (let i = 0; i < rareCount && rarePool.length > 0; i++) {
+                  const pick = rarePool[Math.floor(Math.random() * rarePool.length)];
+                  stats.inventory.push({
+                    instanceId: "inv-" + (Date.now() + i).toString(),
+                    itemId: pick.id,
+                    name: pick.name,
+                    description: pick.description,
+                    icon: pick.icon,
+                    category: pick.category || "system",
+                    rarity: pick.rarity,
+                    effect: pick.effect,
+                    purchasedAt: (/* @__PURE__ */ new Date()).toISOString()
+                  });
+                  chestCount++;
+                }
+                if (Math.random() < 0.1 && legendaryPool.length > 0) {
+                  const legendaryPick = legendaryPool[Math.floor(Math.random() * legendaryPool.length)];
+                  stats.inventory.push({
+                    instanceId: "inv-" + (Date.now() + 99).toString(),
+                    itemId: legendaryPick.id,
+                    name: legendaryPick.name,
+                    description: legendaryPick.description,
+                    icon: legendaryPick.icon,
+                    category: legendaryPick.category || "system",
+                    rarity: legendaryPick.rarity,
+                    effect: legendaryPick.effect,
+                    purchasedAt: (/* @__PURE__ */ new Date()).toISOString()
+                  });
+                  chestCount++;
+                }
+                effectMessage = this.t("inventory.effect.legendaryChest", { count: chestCount });
+                break;
+              }
             }
           }
           stats.inventory.splice(itemIndex, 1);

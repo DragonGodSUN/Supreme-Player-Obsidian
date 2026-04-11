@@ -144,12 +144,12 @@ class DataStore {
 
   getBuiltinLevelDefinitions() {
     return [
-      { minLevel: 0, maxLevel: 5, color: '#9966ff', abilityIcon: '✨', phaseIcon: '🪄' },
-      { minLevel: 6, maxLevel: 10, color: '#00aaff', abilityIcon: '🔮', phaseIcon: '🫧' },
-      { minLevel: 11, maxLevel: 15, color: '#00ffaa', abilityIcon: '🛠️', phaseIcon: '👑' },
-      { minLevel: 16, maxLevel: 20, color: '#ffaa00', abilityIcon: '🌍', phaseIcon: '🧿' },
-      { minLevel: 21, maxLevel: 25, color: '#ff6666', abilityIcon: '🌌', phaseIcon: '👾' },
-      { minLevel: 26, maxLevel: 999, color: '#ffd700', abilityIcon: '♾️', phaseIcon: 'ↂ' }
+      { minLevel: 0, maxLevel: 19, color: '#9966ff', abilityIcon: '✨', phaseIcon: '🪄' },
+      { minLevel: 20, maxLevel: 39, color: '#00aaff', abilityIcon: '🔮', phaseIcon: '🫧' },
+      { minLevel: 40, maxLevel: 59, color: '#00ffaa', abilityIcon: '🛠️', phaseIcon: '👑' },
+      { minLevel: 60, maxLevel: 79, color: '#ffaa00', abilityIcon: '🌍', phaseIcon: '🧿' },
+      { minLevel: 80, maxLevel: 99, color: '#ff6666', abilityIcon: '🌌', phaseIcon: '👾' },
+      { minLevel: 100, maxLevel: 999, color: '#ffd700', abilityIcon: '♾️', phaseIcon: 'ↂ' }
     ];
   }
 
@@ -167,9 +167,20 @@ class DataStore {
   getBuiltinShopDefinitions() {
     return [
       { id: 'wish-star-boost', category: 'system', type: 'consumable', rarity: 'rare', price: 1, icon: '⭐', effect: { type: 'add_wish_stars', value: 5 }, editable: false },
-      { id: 'level-skip', category: 'system', type: 'consumable', rarity: 'legendary', price: 5, icon: '⏫', effect: { type: 'add_points', value: 5000 }, editable: false },
-      { id: 'warmup-card', category: 'system', type: 'consumable', rarity: 'rare', price: 10, icon: '🔥', effect: { type: 'checkin_warmup', value: 1 }, editable: false },
-      { id: 'mystery-box', category: 'system', type: 'consumable', rarity: 'rare', price: 1, icon: '🎁', effect: { type: 'random_wish_stars', min: 1, max: 10 }, editable: true }
+      { id: 'level-skip', category: 'system', type: 'consumable', rarity: 'legendary', price: 2, icon: '⏫', effect: { type: 'add_points', value: 5000 }, editable: false },
+      { id: 'warmup-card', category: 'system', type: 'consumable', rarity: 'rare', price: 3, icon: '🔥', effect: { type: 'checkin_warmup', value: 1 }, editable: false },
+      { id: 'mystery-box', category: 'system', type: 'consumable', rarity: 'rare', price: 1, icon: '🎁', effect: { type: 'random_wish_stars', min: 1, max: 10 }, editable: true },
+      { id: 'double-points-potion', category: 'system', type: 'consumable', rarity: 'rare', price: 5, icon: '💫', effect: { type: 'buff', buffName: this.t('datastore.shop.double-points-potion.name'), buffIcon: '💫', buffDesc: this.t('datastore.shop.double-points-potion.desc'), duration: 24 }, editable: false },
+      { id: 'streak-shield', category: 'system', type: 'consumable', rarity: 'legendary', price: 3, icon: '🛡️', effect: { type: 'streak_shield', value: 1 }, editable: false },
+      { id: 'mystery-box-plus', category: 'system', type: 'consumable', rarity: 'rare', price: 3, icon: '🎁', effect: { type: 'random_wish_stars_plus', min: 1, max: 20, bonusChance: 0.1, bonusAmount: 50 }, editable: false },
+      { id: 'wheel-of-fortune', category: 'system', type: 'consumable', rarity: 'legendary', price: 1, icon: '🃏', effect: { type: 'random_rare_item' }, editable: false },
+      { id: 'legendary-chest', category: 'system', type: 'consumable', rarity: 'legendary', price: 3, icon: '📦', effect: { type: 'legendary_chest' }, editable: false },
+      { id: 'treat-coupon', category: 'external', type: 'consumable', rarity: 'rare', price: 3, icon: '🍰', effect: null, editable: true },
+      { id: 'game-time-coupon', category: 'external', type: 'consumable', rarity: 'rare', price: 5, icon: '🎮', effect: null, editable: true },
+      { id: 'movie-night', category: 'external', type: 'consumable', rarity: 'rare', price: 8, icon: '🎬', effect: null, editable: true },
+      { id: 'small-wish-coupon', category: 'external', type: 'consumable', rarity: 'legendary', price: 2, icon: '🛒', effect: null, editable: true },
+      { id: 'rest-day-pass', category: 'external', type: 'consumable', rarity: 'legendary', price: 5, icon: '🏖️', effect: null, editable: true },
+      { id: 'big-wish-coupon', category: 'external', type: 'consumable', rarity: 'legendary', price: 10, icon: '🎁', effect: null, editable: true }
     ];
   }
 
@@ -466,6 +477,7 @@ class DataStore {
     if (!this.stats.checkInHistory) this.stats.checkInHistory = [];
     if (this.stats.checkInWarmupStacks === undefined) this.stats.checkInWarmupStacks = 0;
     if (this.stats.checkInWarmupAnchorDate === undefined) this.stats.checkInWarmupAnchorDate = null;
+    if (this.stats.streakShieldCount === undefined) this.stats.streakShieldCount = 0;
     if (this.stats.playerName === undefined) this.stats.playerName = this.t('settings.defaultPlayerName');
     if (this.stats.todayPoints === undefined) this.stats.todayPoints = 0;
 
@@ -530,6 +542,7 @@ class DataStore {
       checkInHistory: [],
       checkInWarmupStacks: 0,
       checkInWarmupAnchorDate: null,
+      streakShieldCount: 0,
       wishes: [],
       inventory: [],
       usedExternalItems: [],
@@ -626,8 +639,27 @@ class DataStore {
       return true;
     }
 
+    const today = this.getLocalDateString(referenceDate);
     const yesterday = this.getYesterdayString(referenceDate);
-    return stats.lastCheckInDate === yesterday;
+    if (stats.lastCheckInDate === today || stats.lastCheckInDate === yesterday) {
+      return true;
+    }
+
+    if (!stats.lastCheckInDate && (!stats.checkInHistory || stats.checkInHistory.length === 0)) {
+      return true;
+    }
+
+    if (stats.checkInWarmupAnchorDate === today || stats.checkInWarmupAnchorDate === yesterday) {
+      return true;
+    }
+
+    if (stats.streakShieldCount > 0) {
+      stats.streakShieldCount -= 1;
+      stats.lastCheckInDate = yesterday;
+      return true;
+    }
+
+    return false;
   }
 
   normalizeCheckInWarmupState(referenceDate = new Date()) {
@@ -815,7 +847,7 @@ class DataStore {
 
     if (wish.progress >= 100) {
       const result = await this.completeWish(wishId);
-      return { success: true, wish: null, message: result.message, completed: true, blessings: result.blessings, bonusPoints: result.bonusPoints };
+      return { success: true, wish, message: result.message, completed: true, blessings: result.blessings, bonusPoints: result.bonusPoints };
     }
 
     await this.save();
@@ -1034,6 +1066,87 @@ class DataStore {
             stats.buffs = [];
             effectMessage = this.t('inventory.effect.clearAllBuffs');
             break;
+          case 'streak_shield': {
+            stats.streakShieldCount = (stats.streakShieldCount || 0) + (effect.value || 1);
+            effectMessage = this.t('inventory.effect.streakShield', { value: stats.streakShieldCount });
+            break;
+          }
+          case 'random_wish_stars_plus': {
+            const plusMin = effect.min || 1;
+            const plusMax = effect.max || 20;
+            let plusAmount = Math.floor(Math.random() * (plusMax - plusMin + 1)) + plusMin;
+            const bonusChance = effect.bonusChance || 0.1;
+            const bonusAmount = effect.bonusAmount || 50;
+            if (Math.random() < bonusChance) {
+              plusAmount = bonusAmount;
+              effectMessage = this.t('inventory.effect.randomWishStarsPlus', { value: plusAmount });
+            } else {
+              effectMessage = this.t('inventory.effect.randomWishStars', { value: plusAmount });
+            }
+            stats.wishStars += plusAmount;
+            break;
+          }
+          case 'random_rare_item': {
+            const allShopItems = this.getShopItems().filter(si => si.rarity === 'rare' && si.category === 'system');
+            if (allShopItems.length > 0) {
+              const randomItem = allShopItems[Math.floor(Math.random() * allShopItems.length)];
+              const rewardItem = {
+                instanceId: 'inv-' + Date.now().toString(),
+                itemId: randomItem.id,
+                name: randomItem.name,
+                description: randomItem.description,
+                icon: randomItem.icon,
+                category: randomItem.category || 'system',
+                rarity: randomItem.rarity,
+                effect: randomItem.effect,
+                purchasedAt: new Date().toISOString()
+              };
+              stats.inventory.push(rewardItem);
+              effectMessage = this.t('inventory.effect.randomRareItem', { name: randomItem.name });
+            } else {
+              stats.wishStars += 5;
+              effectMessage = this.t('inventory.effect.addWishStars', { value: 5 });
+            }
+            break;
+          }
+          case 'legendary_chest': {
+            const rarePool = this.getShopItems().filter(si => si.rarity === 'rare' && si.category === 'system');
+            const legendaryPool = this.getShopItems().filter(si => si.rarity === 'legendary' && si.category === 'system');
+            const rareCount = Math.floor(Math.random() * 3) + 1;
+            let chestCount = 0;
+            for (let i = 0; i < rareCount && rarePool.length > 0; i++) {
+              const pick = rarePool[Math.floor(Math.random() * rarePool.length)];
+              stats.inventory.push({
+                instanceId: 'inv-' + (Date.now() + i).toString(),
+                itemId: pick.id,
+                name: pick.name,
+                description: pick.description,
+                icon: pick.icon,
+                category: pick.category || 'system',
+                rarity: pick.rarity,
+                effect: pick.effect,
+                purchasedAt: new Date().toISOString()
+              });
+              chestCount++;
+            }
+            if (Math.random() < 0.1 && legendaryPool.length > 0) {
+              const legendaryPick = legendaryPool[Math.floor(Math.random() * legendaryPool.length)];
+              stats.inventory.push({
+                instanceId: 'inv-' + (Date.now() + 99).toString(),
+                itemId: legendaryPick.id,
+                name: legendaryPick.name,
+                description: legendaryPick.description,
+                icon: legendaryPick.icon,
+                category: legendaryPick.category || 'system',
+                rarity: legendaryPick.rarity,
+                effect: legendaryPick.effect,
+                purchasedAt: new Date().toISOString()
+              });
+              chestCount++;
+            }
+            effectMessage = this.t('inventory.effect.legendaryChest', { count: chestCount });
+            break;
+          }
         }
       }
 
